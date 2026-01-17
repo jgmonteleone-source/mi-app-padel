@@ -7,21 +7,19 @@ from datetime import datetime
 st.set_page_config(page_title="Padel Pro App", layout="wide")
 
 # --- CONEXIÓN A GOOGLE SHEETS ---
-URL_DE_MI_HOJA = "https://docs.google.com/spreadsheets/d/161Ps_8QjwP_DLQrTugvTKXscFiqpx49ICRwahfKEAqo/edit?usp=sharing"
-
+# Usamos la conexión configurada en [connections.gsheets]
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
     try:
-        # Forzamos la lectura usando la URL directa
-        jugadores = conn.read(spreadsheet=URL_DE_MI_HOJA, worksheet="Jugadores", ttl="0")
-        partidos = conn.read(spreadsheet=URL_DE_MI_HOJA, worksheet="Partidos", ttl="0")
+        # Al no pasarle argumentos, busca automáticamente la sección [connections.gsheets] de los Secrets
+        jugadores = conn.read(worksheet="Jugadores", ttl="0")
+        partidos = conn.read(worksheet="Partidos", ttl="0")
         return jugadores, partidos
     except Exception as e:
-        st.error(f"Error detallado: {e}")
-        cols_j = ["Nombre", "Foto", "Puntos", "PP", "PG", "PP_perd", "SG", "SP", "GG", "GP"]
-        cols_p = ["Fecha", "Ganador1", "Ganador2", "Perdedor1", "Perdedor2", "Resultado"]
-        return pd.DataFrame(columns=cols_j), pd.DataFrame(columns=cols_p)
+        st.error(f"Error de conexión: {e}")
+        # Estructura mínima para que el resto de la app no falle
+        return pd.DataFrame(columns=["Nombre", "Foto", "Puntos", "PP", "PG", "PP_perd", "SG", "SP", "GG", "GP"]), pd.DataFrame()
 
 df_jugadores, df_partidos = cargar_datos()
 
