@@ -7,15 +7,16 @@ from datetime import datetime
 st.set_page_config(page_title="Padel Pro App", layout="wide")
 
 # --- CONEXIÓN A GOOGLE SHEETS ---
+# Intentamos leer la URL desde secrets
+URL_SHEET = st.secrets["gsheets"]["spreadsheet"]
+
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Función para cargar datos frescos
+# Función para cargar datos frescos especificando la URL
 def cargar_datos():
-    jugadores_df = conn.read(worksheet="Jugadores", ttl="0")
-    partidos_df = conn.read(worksheet="Partidos", ttl="0")
+    jugadores_df = conn.read(spreadsheet=URL_SHEET, worksheet="Jugadores", ttl="0")
+    partidos_df = conn.read(spreadsheet=URL_SHEET, worksheet="Partidos", ttl="0")
     return jugadores_df, partidos_df
-
-df_jugadores, df_partidos = cargar_datos()
 
 # --- ESTILOS CSS ---
 st.markdown("""
