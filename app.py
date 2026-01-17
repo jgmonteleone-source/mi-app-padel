@@ -2,78 +2,113 @@ import streamlit as st
 import pandas as pd
 
 # --- CONFIGURACIÓN DE PÁGINA ---
-st.set_page_config(page_title="Padel Pro App", layout="wide")
+st.set_page_config(page_title="Padel Pro Stats", layout="wide")
 
-# --- SIMULACIÓN DE BASE DE DATOS (Esto luego irá a la nube) ---
+# --- BASE DE DATOS TEMPORAL (Se reinicia al refrescar hasta conectar Firebase) ---
 if 'jugadores' not in st.session_state:
+    nombres = ["Agustín Tapia", "Arturo Coello", "Ale Galán", "Fede Chingotto"]
     st.session_state.jugadores = {
-        "Agustín Tapia": {"puntos": 15, "foto": "👤", "pp": 6, "pg": 5, "pp_perd": 1, "sg": 10, "sp": 3, "gg": 72, "gp": 45},
-        "Arturo Coello": {"puntos": 14, "foto": "👤", "pp": 6, "pg": 4, "pp_perd": 2, "sg": 9, "sp": 4, "gg": 68, "gp": 50},
-        "Ale Galán": {"puntos": 12, "foto": "👤", "pp": 5, "pg": 4, "pp_perd": 1, "sg": 8, "sp": 3, "gg": 60, "gp": 40},
+        n: {"puntos": 0, "foto": "👤", "pp": 0, "pg": 0, "pp_perd": 0, "sg": 0, "sp": 0, "gg": 0, "gp": 0} 
+        for n in nombres
     }
 
-# --- ESTILOS ---
-st.title("🎾 Padel Ranking App")
+# --- FUNCIÓN LÓGICA DE PROCESAMIENTO ---
+def procesar_resultado(ganadores, perdedores, score_str):
+    try:
+        # Limpiar y convertir el score (ej: "6-4, 2-6, 6-3")
+        sets = [s.strip().split('-') for s in score_str.split(',')]
+        sets = [(int(s[0]), int(s[1])) for s in sets]
+        
+        sg_ganadores = 0
+        sg_perdedores = 0
+        gg_ganadores = 0
+        gg_perdedores = 0
 
-# --- NAVEGACIÓN ---
-menu = st.sidebar.selectbox("Menú", ["Ranking General", "Cargar Partido", "Mi Perfil"])
+        for g1, g2 in sets:
+            gg_ganadores += g1
+            gg_perdedores += g2
+            if g1 > g2: sg_ganadores += 1
+            else: sg_perdedores += 1
+
+        # Determinar puntos según tus reglas
+        pts_gan = 3 if sg_perdedores == 0 else 2
+        pts_per = 1 if sg_ganadores == 1 else 0
+
+        # Actualizar a los 2 ganadores
+        for g in ganadores:
+            st.session_state.jugadores[g]["puntos"] += pts_gan
+            st.session_state.jugadores[g]["pp"] += 1
+            st.session_state.jugadores[g]["pg"] += 1
+            st.session_state.jugadores[g]["sg"] += sg_ganadores
+            st.session_state.jugadores[g]["sp"] += sg_perdedores
+            st.session_state.jugadores[g]["gg"] += gg_ganadores
+            st.session_state.jugadores[g]["gp"] += gg_perdedores
+
+        # Actualizar a los 2 perdedores
+        for p in perdedores:
+            st.session_state.jugadores[p]["puntos"] += pts_per
+            st.session_state.jugadores[p]["pp"] += 1
+            st.session_state.jugadores[p]["pp_perd"] += 1
+            st.session_state.jugadores[p]["sg"] += sg_perdedores
+            st.session_state.jugadores[p]["sp"] += sg_ganadores
+            st.session_state.jugadores[p]["gg"] += gg_perdedores
+            st.session_state.jugadores[p]["gp"] += gg_ganadores
+            
+        return True
+    except:
+        return False
+
+# --- INTERFAZ ---
+st.title("🎾 Padel Ranking Pro")
+
+menu = st.sidebar.selectbox("Menú", ["Ranking General", "Cargar Partido"])
 
 if menu == "Ranking General":
-    st.header("🏆 Ranking de Jugadores")
+    st.header("🏆 Clasificación")
+    df = pd.DataFrame.from_dict(st.session_state.jugadores, orient='index')
+    df = df.sort_values(by="puntos", ascending=False)
     
-    # Convertir datos para mostrar en tabla
-    df_ranking = pd.DataFrame.from_dict(st.session_state.jugadores, orient='index')
-    df_ranking = df_ranking.sort_values(by="puntos", ascending=False)
-    
-    # Mostrar Ranking con interacción
-    for nombre in df_ranking.index:
-        cols = st.columns([1, 4, 2, 2])
-        with cols[0]:
-            st.write(st.session_state.jugadores[nombre]["foto"])
-        with cols[1]:
-            if st.button(nombre, key=nombre):
-                st.session_state.perfil_seleccionado = nombre
-                st.rerun()
-        with cols[2]:
-            st.write(f"*{st.session_state.jugadores[nombre]['puntos']} pts*")
-        with cols[3]:
-            st.caption(f"{st.session_state.jugadores[nombre]['pg']}V - {st.session_state.jugadores[nombre]['pp_perd']}D")
+    for nombre in df.index:
+        col1, col2, col3 = st.columns([1, 3, 2])
+        col1.write(st.session_state.jugadores[nombre]["foto"])
+        if col2.button(nombre):
+            st.session_state.ver_perfil = nombre
+        col3.write(f"**{st.session_state.jugadores[nombre]['puntos']} Pts**")
 
-    # --- PANTALLA DE DETALLE (ESTADÍSTICAS) ---
-    if 'perfil_seleccionado' in st.session_state:
+    if "ver_perfil" in st.session_state:
         st.divider()
-        p = st.session_state.perfil_seleccionado
-        datos = st.session_state.jugadores[p]
-        
-        st.subheader(f"Estadísticas Detalladas: {p}")
+        n = st.session_state.ver_perfil
+        d = st.session_state.jugadores[n]
+        st.subheader(f"📊 Estadísticas de {n}")
         c1, c2, c3 = st.columns(3)
-        c1.metric("Partidos Jugados (PP)", datos["pp"])
-        c1.metric("Partidos Ganados (PG)", datos["pg"])
-        c1.metric("Partidos Perdidos (PP)", datos["pp_perd"])
-        
-        c2.metric("Sets Ganados (SG)", datos["sg"])
-        c2.metric("Sets Perdidos (SP)", datos["sp"])
-        
-        c3.metric("Games Ganados (GG)", datos["gg"])
-        c3.metric("Games Perdidos (GP)", datos["gp"])
-        
+        c1.metric("Partidos (PG/PP)", f"{d['pg']}/{d['pp_perd']}")
+        c2.metric("Sets (SG/SP)", f"{d['sg']}/{d['sp']}")
+        c3.metric("Games (GG/GP)", f"{d['gg']}/{d['gp']}")
         if st.button("Cerrar Perfil"):
-            del st.session_state.perfil_seleccionado
+            del st.session_state.ver_perfil
             st.rerun()
 
 elif menu == "Cargar Partido":
-    st.header("📝 Registro de Resultado")
+    st.header("📝 Nuevo Resultado")
+    lista_j = list(st.session_state.jugadores.keys())
     
-    with st.form("form_partido"):
-        col1, col2 = st.columns(2)
-        with col1:
-            j1 = st.selectbox("Jugador 1 (Tú)", list(st.session_state.jugadores.keys()))
-            j2 = st.selectbox("Pareja", list(st.session_state.jugadores.keys()))
-        with col2:
-            r1 = st.selectbox("Rival 1", list(st.session_state.jugadores.keys()))
-            r2 = st.selectbox("Rival 2", list(st.session_state.jugadores.keys()))
+    with st.form("registro"):
+        st.subheader("Pareja Ganadora")
+        g1 = st.selectbox("Ganador 1", lista_j)
+        g2 = st.selectbox("Ganador 2", lista_j)
         
-        resultado = st.text_input("Resultado (ej: 6-4, 2-6, 6-3)", placeholder="6-4, 6-2")
+        st.subheader("Pareja Perdedora")
+        p1 = st.selectbox("Perdedor 1", lista_j)
+        p2 = st.selectbox("Perdedor 2", lista_j)
         
-        if st.form_submit_button("Guardar Partido"):
-            st.success("Partido guardado con éxito. (Lógica de puntos aplicada)")
+        resultado = st.text_input("Resultado (ej: 6-4, 2-6, 6-3)")
+        
+        if st.form_submit_button("Registrar Partido"):
+            if g1 != g2 and p1 != p2 and g1 not in [p1, p2]:
+                exito = procesar_resultado([g1, g2], [p1, p2], resultado)
+                if exito: 
+                    st.success("¡Ranking actualizado!")
+                else: 
+                    st.error("Formato de resultado incorrecto (usa: 6-4, 6-2)")
+            else:
+                st.error("Un jugador no puede estar en dos posiciones a la vez.")
