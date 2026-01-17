@@ -7,16 +7,29 @@ from datetime import datetime
 st.set_page_config(page_title="Padel Pro App", layout="wide")
 
 # --- CONEXIÓN A GOOGLE SHEETS ---
-# Intentamos leer la URL desde secrets
-URL_SHEET = st.secrets["gsheets"]["spreadsheet"]
-
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Función para cargar datos frescos especificando la URL
 def cargar_datos():
-    jugadores_df = conn.read(spreadsheet=URL_SHEET, worksheet="Jugadores", ttl="0")
-    partidos_df = conn.read(spreadsheet=URL_SHEET, worksheet="Partidos", ttl="0")
-    return jugadores_df, partidos_df
+    try:
+        # Intentamos leer usando la configuración de secrets
+        jugadores = conn.read(worksheet="Jugadores", ttl="0")
+        partidos = conn.read(worksheet="Partidos", ttl="0")
+        return jugadores, partidos
+    except Exception as e:
+        st.error(f"Error de conexión: {e}")
+        # Retornamos DataFrames vacíos con las columnas necesarias para que no explote el código
+        cols_j = ["Nombre", "Foto", "Puntos", "PP", "PG", "PP_perd", "SG", "SP", "GG", "GP"]
+        cols_p = ["Fecha", "Ganador1", "Ganador2", "Perdedor1", "Perdedor2", "Resultado"]
+        return pd.DataFrame(columns=cols_j), pd.DataFrame(columns=cols_p)
+
+df_jugadores, df_partidos = cargar_datos()
+
+# Verificación de seguridad: Si el DF está vacío, crear un jugador de ejemplo
+if df_jugadores.empty:
+    st.warning("⚠️ La base de datos está vacía o no conectó. Revisa los nombres de las pestañas en Google Sheets.")
+    # Esto evita el error de la línea 36 al dar una estructura mínima
+    df_jugadores = pd.DataFrame([{"Nombre": "Ejemplo", "Foto": "👤", "Puntos": 0, "PP": 0, "PG": 0, "PP_perd": 0, "SG": 0, "SP": 0, "GG": 0, "GP": 0}])
+
 
 # --- ESTILOS CSS ---
 st.markdown("""
