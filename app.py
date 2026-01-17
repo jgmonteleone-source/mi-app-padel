@@ -128,23 +128,29 @@ elif menu == "📝 Cargar Partido":
         p2s2 = r2_s2.number_input("P2S2", 0, 7, key="p2s2", label_visibility="collapsed")
         p2s3 = r2_s3.number_input("P2S3", 0, 7, key="p2s3", label_visibility="collapsed")
         
-        if st.form_submit_button("💾 GUARDAR PARTIDO EN LA NUBE", use_container_width=True):
+if st.form_submit_button("💾 GUARDAR PARTIDO EN LA NUBE", use_container_width=True):
             jugadores_set = {p1j1, p1j2, p2j1, p2j2}
             if len(jugadores_set) < 4:
                 st.error("Error: Hay jugadores repetidos.")
             else:
-                # Calcular ganador
+                # 1. Cálculo de sets para determinar puntos
                 s_p1 = (1 if p1s1 > p2s1 else 0) + (1 if p1s2 > p2s2 else 0) + (1 if p1s3 > p2s3 else 0)
                 s_p2 = (1 if p2s1 > p1s1 else 0) + (1 if p2s2 > p1s2 else 0) + (1 if p2s3 > p1s3 else 0)
                 
                 if s_p1 == s_p2:
                     st.error("El partido no puede quedar en empate.")
                 else:
-                    # Preparar fila para GSheets
+                    # 2. Determinar ganadores y perdedores
                     score_final = f"{p1s1}-{p2s1}, {p1s2}-{p2s2}" + (f", {p1s3}-{p2s3}" if (p1s3+p2s3)>0 else "")
-                    ganadores = [p1j1, p1j2] if s_p1 > s_p2 else [p2j1, p2j2]
-                    perdedores = [p2j1, p2j2] if s_p1 > s_p2 else [p1j1, p1j2]
+                    es_p1_ganador = s_p1 > s_p2
+                    ganadores = [p1j1, p1j2] if es_p1_ganador else [p2j1, p2j2]
+                    perdedores = [p2j1, p2j2] if es_p1_ganador else [p1j1, p1j2]
                     
+                    # Puntos según tus reglas
+                    pts_g = 3 if (s_p1 == 2 and s_p2 == 0) or (s_p2 == 2 and s_p1 == 0) else 2
+                    pts_p = 1 if (s_p1 + s_p2 == 3) else 0
+
+                    # 3. Preparar nueva fila de partido
                     nueva_fila = pd.DataFrame([{
                         "Fecha": datetime.now().strftime("%d/%m/%Y"),
                         "Ganador1": ganadores[0], "Ganador2": ganadores[1],
@@ -152,33 +158,42 @@ elif menu == "📝 Cargar Partido":
                         "Resultado": score_final
                     }])
                     
-                    # ACTUALIZAR GOOGLE SHEETS
-                    df_partidos_new = pd.concat([df_partidos, nueva_fila], ignore_index=True)
-                    
-                    # Lógica de puntos para actualizar la tabla de jugadores
-                    pts_g = 3 if (s_p1 == 2 and s_p2 == 0) or (s_p2 == 2 and s_p1 == 0) else 2
-                    pts_p = 1 if (s_p1 + s_p2 == 3) else 0
-                    
-                    # Actualizamos el DataFrame de jugadores localmente antes de subirlo
+                    # 4. ACTUALIZAR JUGADORES (Asegurando que sean números)
+                    # Convertimos columnas a numéricas por si acaso
+                    cols_num = ['Puntos', 'PP', 'PG', 'PP_perd', 'SG', 'SP', 'GG', 'GP']
+                    for c in cols_num:
+                        df_jugadores[c] = pd.to_numeric(df_jugadores[c]).fillna(0)
+
                     for j in ganadores:
                         idx = df_jugadores.index[df_jugadores['Nombre'] == j][0]
                         df_jugadores.at[idx, 'Puntos'] += pts_g
                         df_jugadores.at[idx, 'PG'] += 1
                         df_jugadores.at[idx, 'PP'] += 1
-                        # (Aquí podrías añadir el resto de SG, GG, etc. siguiendo la misma lógica)
+                        df_jugadores.at[idx, 'SG'] += (s_p1 if es_p1_ganador else s_p2)
+                        df_jugadores.at[idx, 'SP'] += (s_p2 if es_p1_ganador else s_p1)
+                        # Suma de games ganados/perdidos
+                        df_jugadores.at[idx, 'GG'] += (p1s1+p1s2+p1s3 if es_p1_ganador else p2s1+p2s2+p2s3)
+                        df_jugadores.at[idx, 'GP'] += (p2s1+p2s2+p2s3 if es_p1_ganador else p1s1+p1s2+p1s3)
                         
                     for j in perdedores:
                         idx = df_jugadores.index[df_jugadores['Nombre'] == j][0]
                         df_jugadores.at[idx, 'Puntos'] += pts_p
                         df_jugadores.at[idx, 'PP_perd'] += 1
                         df_jugadores.at[idx, 'PP'] += 1
+                        df_jugadores.at[idx, 'SG'] += (s_p2 if es_p1_ganador else s_p1)
+                        df_jugadores.at[idx, 'SP'] += (s_p1 if es_p1_ganador else s_p2)
+                        df_jugadores.at[idx, 'GG'] += (p2s1+p2s2+p2s3 if es_p1_ganador else p1s1+p1s2+p1s3)
+                        df_jugadores.at[idx, 'GP'] += (p1s1+p1s2+p1s3 if es_p1_ganador else p2s1+p2s2+p2s3)
 
-                    # Subir cambios
+                    # 5. SUBIR A CLOUD
+                    df_partidos_new = pd.concat([df_partidos, nueva_fila], ignore_index=True)
                     conn.update(worksheet="Partidos", data=df_partidos_new)
                     conn.update(worksheet="Jugadores", data=df_jugadores)
                     
-                    st.success("¡Partido guardado con éxito en Google Sheets!")
+                    st.success("¡Ranking y Historial actualizados!")
                     st.balloons()
+                    # Forzar recarga de la página para ver los cambios en el ranking
+                    st.rerun()
 
 elif menu == "👤 Gestionar Jugadores":
     st.title("Gestión de Jugadores")
