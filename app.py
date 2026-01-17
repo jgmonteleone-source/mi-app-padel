@@ -127,61 +127,61 @@ elif menu == "📝 Cargar Partido":
     st.title("📝 Registrar Nuevo Partido")
     lista_j = sorted(list(st.session_state.jugadores.keys()))
     
-    with st.form("match_form_v2"):
-        # Encabezados de tabla
-        h1, h2, s1, s2, s3 = st.columns([2, 2, 1, 1, 1])
-        s1.markdown("**Set 1**")
-        s2.markdown("**Set 2**")
-        s3.markdown("**Set 3**")
+    with st.form("match_form_v3"):
+        # Encabezados con estilo
+        h_col1, h_col2, h_s1, h_s2, h_s3 = st.columns([2, 2, 0.8, 0.8, 0.8])
+        h_col1.markdown("**Jugadores**")
+        h_s1.markdown("**Set 1**")
+        h_s2.markdown("**Set 2**")
+        h_s3.markdown("**Set 3**")
         
         # FILA PAREJA 1
         st.markdown("### Pareja 1")
-        r1_col1, r1_col2, r1_s1, r1_s2, r1_s3 = st.columns([2, 2, 1, 1, 1])
-        p1_j1 = r1_col1.selectbox("Jugador 1", lista_j, key="p1j1")
-        p1_j2 = r1_col2.selectbox("Jugador 2", lista_j, key="p1j2")
-        p1_s1 = r1_s1.number_input("Games P1-S1", 0, 7, 0, key="p1s1", label_visibility="collapsed")
-        p1_s2 = r1_s2.number_input("Games P1-S2", 0, 7, 0, key="p1s2", label_visibility="collapsed")
-        p1_s3 = r1_s3.number_input("Games P1-S3", 0, 7, 0, key="p1s3", label_visibility="collapsed")
+        r1_c1, r1_c2, r1_s1, r1_s2, r1_s3 = st.columns([2, 2, 0.8, 0.8, 0.8])
+        p1_j1 = r1_c1.selectbox("J1", lista_j, key="p1j1", label_visibility="collapsed")
+        p1_j2 = r1_c2.selectbox("J2", lista_j, key="p1j2", label_visibility="collapsed")
+        # El truco para alinear es usar un pequeño padding o asegurar que no haya labels
+        p1_s1 = r1_s1.number_input("S1", 0, 7, 0, key="p1s1", label_visibility="collapsed")
+        p1_s2 = r1_s2.number_input("S2", 0, 7, 0, key="p1s2", label_visibility="collapsed")
+        p1_s3 = r1_s3.number_input("S3", 0, 7, 0, key="p1s3", label_visibility="collapsed")
         
         st.divider()
         
         # FILA PAREJA 2
         st.markdown("### Pareja 2")
-        r2_col1, r2_col2, r2_s1, r2_s2, r2_s3 = st.columns([2, 2, 1, 1, 1])
-        p2_j1 = r2_col1.selectbox("Jugador 3", lista_j, key="p2j1")
-        p2_j2 = r2_col2.selectbox("Jugador 4", lista_j, key="p2j2")
-        p2_s1 = r2_s1.number_input("Games P2-S1", 0, 7, 0, key="p2s1", label_visibility="collapsed")
-        p2_s2 = r2_s2.number_input("Games P2-S2", 0, 7, 0, key="p2s2", label_visibility="collapsed")
-        p2_s3 = r2_s3.number_input("Games P2-S3", 0, 7, 0, key="p2s3", label_visibility="collapsed")
+        r2_c1, r2_c2, r2_s1, r2_s2, r2_s3 = st.columns([2, 2, 0.8, 0.8, 0.8])
+        p2_j1 = r2_c1.selectbox("J3", lista_j, key="p2j1", label_visibility="collapsed")
+        p2_j2 = r2_c2.selectbox("J4", lista_j, key="p2j2", label_visibility="collapsed")
+        p2_s1 = r2_s1.number_input("S1_p2", 0, 7, 0, key="p2s1", label_visibility="collapsed")
+        p2_s2 = r2_s2.number_input("S2_p2", 0, 7, 0, key="p2s2", label_visibility="collapsed")
+        p2_s3 = r2_s3.number_input("S3_p2", 0, 7, 0, key="p2s3", label_visibility="collapsed")
 
-        if st.form_submit_button("GUARDAR RESULTADO"):
-            # Validar que no haya jugadores repetidos
+        st.write("") # Espaciador
+        
+        if st.form_submit_button("💾 GUARDAR RESULTADO", use_container_width=True):
             jugadores_partido = {p1_j1, p1_j2, p2_j1, p2_j2}
             if len(jugadores_partido) < 4:
-                st.error("Error: Un jugador no puede estar en dos posiciones.")
+                st.error("⚠️ Error: No puedes repetir jugadores.")
             else:
-                # Construir el score_str automáticamente para la lógica matemática
-                # Formato: "6-4, 4-6, 6-2" (solo incluimos el 3er set si hubo juegos)
+                # Construcción del string de resultado
                 sets_list = [f"{p1_s1}-{p2_s1}", f"{p1_s2}-{p2_s2}"]
                 if p1_s3 > 0 or p2_s3 > 0:
                     sets_list.append(f"{p1_s3}-{p2_s3}")
-                
                 score_str = ", ".join(sets_list)
                 
-                # Determinar quién ganó el partido
+                # Lógica de ganador
                 sets_p1 = (1 if p1_s1 > p2_s1 else 0) + (1 if p1_s2 > p2_s2 else 0) + (1 if p1_s3 > p2_s3 else 0)
                 sets_p2 = (1 if p2_s1 > p1_s1 else 0) + (1 if p2_s2 > p1_s2 else 0) + (1 if p2_s3 > p1_s3 else 0)
                 
                 if sets_p1 == sets_p2:
-                    st.error("Error: El partido no puede ser empate.")
+                    st.error("⚠️ El partido debe tener un ganador (ej: 2 sets a 1).")
                 else:
                     ganadores = [p1_j1, p1_j2] if sets_p1 > sets_p2 else [p2_j1, p2_j2]
                     perdedores = [p2_j1, p2_j2] if sets_p1 > sets_p2 else [p1_j1, p1_j2]
                     
                     if registrar_partido(ganadores[0], ganadores[1], perdedores[0], perdedores[1], score_str):
-                        st.success(f"¡Partido guardado! Victoria para {' / '.join(ganadores)} por {score_str}")
-                    else:
-                        st.error("Error al procesar los puntos.")
+                        st.success(f"✅ ¡Guardado! Ganaron {ganadores[0]} y {ganadores[1]}")
+                        st.balloons()
 
 elif menu == "👤 Gestionar Jugadores":
     st.title("👤 Gestión de Perfiles")
