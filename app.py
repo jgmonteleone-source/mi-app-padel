@@ -34,16 +34,15 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
     try:
-        # Cargamos Jugadores y forzamos que los vacíos sean 0
+        # Carga de Jugadores: forzamos limpieza de nulos para el Ranking
         jugadores = conn.read(worksheet="Jugadores").dropna(subset=["Nombre"])
         cols_numericas = ['Puntos', 'PG', 'PP_perd', 'SG', 'SP']
         for col in cols_numericas:
             if col in jugadores.columns:
-                jugadores[col] = pd.to_numeric(jugadores[col]).fillna(0)
+                jugadores[col] = pd.to_numeric(jugadores[col], errors='coerce').fillna(0)
         
-        # Cargamos Partidos
-        partidos = conn.read(worksheet="Partidos")
-        # Si la hoja está totalmente vacía (solo encabezados), creamos un DF limpio
+        # Carga de Partidos: manejamos hoja vacía
+        partidos = conn.read(worksheet="Partidos", ttl=0) # ttl=0 para que siempre lea lo último
         if partidos.empty:
             partidos = pd.DataFrame(columns=["Fecha", "Ganador1", "Ganador2", "Perdedor1", "Perdedor2", "Resultado"])
         else:
@@ -55,9 +54,10 @@ def cargar_datos():
     except:
         return pd.DataFrame(), pd.DataFrame()
 
+# Recargamos datos
 df_jugadores, df_partidos = cargar_datos()
 
-# --- FUNCIÓN FILTRADO ---
+# --- FUNCIONES DE APOYO ---
 def filtrar_por_fecha(df, opcion):
     hoy = datetime.now()
     if df.empty or 'Fecha' not in df.columns: return df
@@ -69,7 +69,6 @@ def filtrar_por_fecha(df, opcion):
         return df[(df['Fecha'].dt.year == mes_pasado.year) & (df['Fecha'].dt.month == mes_pasado.month)]
     return df
 
-# --- FICHA TÉCNICA ---
 @st.dialog("📊 Ficha Técnica")
 def mostrar_perfil(nombre_jugador, df_jugadores):
     df_temp = df_jugadores.sort_values(by="Puntos", ascending=False).reset_index(drop=True)
@@ -180,14 +179,18 @@ elif menu == "📝 Cargar partido":
                 perdedores = [p2j1, p2j2] if sets_p1 >= 2 else [p1j1, p1j2]
                 res = f"{s1p1}-{s1p2}, {s2p1}-{s2p2}" + (f", {s3p1}-{s3p2}" if (s3p1+s3p2)>0 else "")
                 
+                # --- GUARDADO BLINDADO ---
                 nueva_fila = pd.DataFrame([{"Fecha": datetime.now().strftime("%d/%m/%Y"), "Ganador1": ganadores[0], "Ganador2": ganadores[1], "Perdedor1": perdedores[0], "Perdedor2": perdedores[1], "Resultado": res}])
                 
-                # RECARGA SEGURA PARA NO SOBREESCRIBIR
-                _, df_actual = cargar_datos()
-                df_total = pd.concat([df_actual, nueva_fila], ignore_index=True)
-                conn.update(worksheet="Partidos", data=df_total)
-                st.success("✅ ¡Guardado!")
-                st.cache_data.clear()
+                # Leemos la hoja limpia, sin caché, para saber qué hay de verdad
+                df_backup = conn.read(worksheet="Partidos", ttl=0)
+                # Unimos lo viejo con lo nuevo (ignorando índices viejos)
+                df_final = pd.concat([df_backup, nueva_fila], ignore_index=True)
+                # Actualizamos la hoja completa
+                conn.update(worksheet="Partidos", data=df_final)
+                
+                st.success("✅ ¡Guardado con éxito!")
+                st.cache_data.clear() # Limpiamos caché para que el Ranking se entere
 
 # --- 4. BUSCAR JUGADOR ---
 elif menu == "🔍 Buscar Jugador":
