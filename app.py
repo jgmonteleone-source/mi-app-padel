@@ -1,49 +1,53 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Padel Pro App", layout="wide")
 
-# --- CSS FIJO (DISEÑO DE TARJETAS Y SOMBRAS) ---
+# --- CSS FIJO E INAMOVIBLE (SOMBRAS Y TARJETAS) ---
 st.markdown("""
     <style>
-    /* Estética de Tarjeta para Ranking y Bloques de Carga */
-    .st-emotion-cache-12w0qpk, div[data-testid="stVerticalBlockBorderWrapper"] {
-        box-shadow: 0px 10px 25px rgba(0,0,0,0.15) !important;
+    /* Forzar sombras reales en todos los contenedores con borde */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        box-shadow: 0px 10px 30px rgba(0,0,0,0.2) !important;
         border-radius: 15px !important;
         padding: 20px !important;
         background-color: white !important;
-        border: 1px solid #eee !important;
-        margin-bottom: 20px !important;
+        border: 1px solid #f0f0f0 !important;
+        margin-bottom: 25px !important;
     }
     
-    /* Tarjeta específica del Ranking */
+    /* Estilo de la tarjeta de Ranking */
     .ranking-card {
         text-align: center;
     }
-
     .ranking-card img {
-        width: 130px;
-        height: 130px;
+        width: 140px;
+        height: 140px;
         border-radius: 50%;
         object-fit: cover;
         border: 4px solid #007bff;
-        margin: 0 auto 10px auto;
+        margin: 0 auto 15px auto;
         display: block;
     }
-
     .ranking-name {
-        font-size: 22px;
+        font-size: 24px;
         font-weight: bold;
         color: #333;
     }
-
     .ranking-points {
-        font-size: 18px;
+        font-size: 20px;
         color: #007bff;
         font-weight: bold;
+        margin-top: 5px;
+    }
+    /* Estilo para los títulos de filtros */
+    .filtro-resaltado {
+        font-size: 19px;
+        font-weight: bold;
+        margin-bottom: 5px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -55,6 +59,7 @@ def cargar_datos():
     try:
         jugadores = conn.read(worksheet="Jugadores").dropna(subset=["Nombre"])
         partidos = conn.read(worksheet="Partidos").dropna(subset=["Fecha"])
+        partidos['Fecha'] = pd.to_datetime(partidos['Fecha'], dayfirst=True, errors='coerce')
         jugadores['Nombre'] = jugadores['Nombre'].astype(str).str.strip()
         return jugadores, partidos
     except:
@@ -62,23 +67,32 @@ def cargar_datos():
 
 df_jugadores, df_partidos = cargar_datos()
 
-# --- FICHA TÉCNICA (ORDEN FIJO Y SIN ERRORES) ---
+# --- FUNCIÓN FILTRADO ---
+def filtrar_por_fecha(df, opcion):
+    hoy = datetime.now()
+    if df.empty: return df
+    if opcion == "Este año": return df[df['Fecha'].dt.year == hoy.year]
+    elif opcion == "Año pasado": return df[df['Fecha'].dt.year == hoy.year - 1]
+    elif opcion == "Este mes": return df[(df['Fecha'].dt.year == hoy.year) & (df['Fecha'].dt.month == hoy.month)]
+    elif opcion == "Mes pasado":
+        mes_pasado = (hoy.replace(day=1) - timedelta(days=1))
+        return df[(df['Fecha'].dt.year == mes_pasado.year) & (df['Fecha'].dt.month == mes_pasado.month)]
+    return df
+
+# --- FICHA TÉCNICA ---
 @st.dialog("📊 Ficha Técnica")
 def mostrar_perfil(nombre_jugador, df_jugadores):
     df_temp = df_jugadores.sort_values(by="Puntos", ascending=False).reset_index(drop=True)
     posicion = df_temp[df_temp['Nombre'] == nombre_jugador].index[0] + 1
     datos = df_temp[df_temp['Nombre'] == nombre_jugador].iloc[0]
-    
     st.markdown(f"<h2 style='text-align: center;'>👤 {nombre_jugador}</h2>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center; color: gray;'>🏆 Posición: #{posicion}</h3>", unsafe_allow_html=True)
     st.markdown(f"<h3 style='text-align: center; color: #007bff;'>⭐ Puntos: {int(datos['Puntos'])}</h3>", unsafe_allow_html=True)
     st.divider()
-    
     st.write(f"✅ **Ganados:** {int(datos['PG'])}")
     st.write(f"❌ **Perdidos:** {int(datos['PP_perd'])}")
     st.write(f"🎾 **Sets ganados:** {int(datos['SG'])}")
     st.write(f"🎾 **Sets perdidos:** {int(datos['SP'])}")
-    
     total = int(datos['PG']) + int(datos['PP_perd'])
     if total > 0:
         efect = (int(datos['PG']) / total) * 100
@@ -90,7 +104,10 @@ menu = st.sidebar.radio("MENÚ", ["🏆 Ranking", "⚔️ H2H", "📝 Cargar par
 
 # --- 1. RANKING ---
 if menu == "🏆 Ranking":
+    st.markdown('<p class="filtro-resaltado">Periodo</p>', unsafe_allow_html=True)
+    rango = st.selectbox("", ["Siempre", "Este año", "Año pasado", "Este mes", "Mes pasado"], label_visibility="collapsed")
     st.title("🏆 Ranking")
+    
     df_rank = df_jugadores.sort_values(by="Puntos", ascending=False).reset_index(drop=True)
 
     for i, row in df_rank.iterrows():
@@ -104,45 +121,49 @@ if menu == "🏆 Ranking":
                     <div class="ranking-points">{int(row['Puntos'])} PUNTOS</div>
                 </div>
             """, unsafe_allow_html=True)
-            
-            if st.button(f"Ver Ficha", key=f"btn_{row['Nombre']}", use_container_width=True):
+            if st.button("Ver Ficha", key=f"btn_{row['Nombre']}", use_container_width=True):
                 mostrar_perfil(row['Nombre'], df_jugadores)
 
-# --- 2. H2H (TÍTULOS CORREGIDOS) ---
+# --- 2. H2H ---
 elif menu == "⚔️ H2H":
+    st.markdown('<p class="filtro-resaltado">Periodo</p>', unsafe_allow_html=True)
+    rango_h2h = st.selectbox("", ["Siempre", "Este año", "Año pasado", "Este mes", "Mes pasado"], label_visibility="collapsed")
     st.title("⚔️ Cara a Cara")
+    
+    df_p_filt = filtrar_por_fecha(df_partidos, rango_h2h)
     nombres = sorted(df_jugadores["Nombre"].tolist())
     j1 = st.selectbox("Jugador 1", nombres, index=0)
     j2 = st.selectbox("Jugador 2", nombres, index=1)
 
     mask = (
-        ((df_partidos['Ganador1'] == j1) | (df_partidos['Ganador2'] == j1) | (df_partidos['Perdedor1'] == j1) | (df_partidos['Perdedor2'] == j1)) &
-        ((df_partidos['Ganador1'] == j2) | (df_partidos['Ganador2'] == j2) | (df_partidos['Perdedor1'] == j2) | (df_partidos['Perdedor2'] == j2))
+        ((df_p_filt['Ganador1'] == j1) | (df_p_filt['Ganador2'] == j1) | (df_p_filt['Perdedor1'] == j1) | (df_p_filt['Perdedor2'] == j1)) &
+        ((df_p_filt['Ganador1'] == j2) | (df_p_filt['Ganador2'] == j2) | (df_p_filt['Perdedor1'] == j2) | (df_p_filt['Perdedor2'] == j2))
     )
-    enfrentamientos = df_partidos[mask].copy()
+    enf = df_p_filt[mask].copy()
     
-    # Renombrar columnas para la visualización
-    enfrentamientos['Ganadores'] = enfrentamientos['Ganador1'] + " / " + enfrentamientos['Ganador2']
-    enfrentamientos['Perdedores'] = enfrentamientos['Perdedor1'] + " / " + enfrentamientos['Perdedor2']
+    v1 = len(enf[(enf['Ganador1'] == j1) | (enf['Ganador2'] == j1)])
+    v2 = len(enf[(enf['Ganador1'] == j2) | (enf['Ganador2'] == j2)])
     
-    st.dataframe(enfrentamientos[["Fecha", "Ganadores", "Perdedores", "Resultado"]], hide_index=True, use_container_width=True)
+    st.markdown("### HISTORIAL:")
+    st.markdown(f"## {j1} {v1} — {v2} {j2}") # Salto de línea implícito por el encabezado H2
+    
+    enf['Ganadores'] = enf['Ganador1'] + " / " + enf['Ganador2']
+    enf['Perdedores'] = enf['Perdedor1'] + " / " + enf['Perdedor2']
+    enf['Fecha_str'] = enf['Fecha'].dt.strftime('%d/%m/%Y')
+    
+    st.dataframe(enf[["Fecha_str", "Ganadores", "Perdedores", "Resultado"]], hide_index=True, use_container_width=True)
 
-# --- 3. CARGAR PARTIDO (CON TARJETAS SOMBREADAS) ---
+# --- 3. CARGAR PARTIDO ---
 elif menu == "📝 Cargar partido":
     st.title("📝 Registrar Partido")
     nombres = sorted(df_jugadores["Nombre"].tolist())
-    
-    with st.form("form_registro"):
+    with st.form("f_reg"):
         with st.container(border=True):
             st.subheader("👥 Pareja 1")
-            p1j1 = st.selectbox("Jugador A", nombres)
-            p1j2 = st.selectbox("Jugador B", nombres)
-
+            p1j1, p1j2 = st.selectbox("Jugador A", nombres), st.selectbox("Jugador B", nombres)
         with st.container(border=True):
             st.subheader("👥 Pareja 2")
-            p2j1 = st.selectbox("Jugador C", nombres)
-            p2j2 = st.selectbox("Jugador D", nombres)
-
+            p2j1, p2j2 = st.selectbox("Jugador C", nombres), st.selectbox("Jugador D", nombres)
         for i in [1, 2, 3]:
             with st.container(border=True):
                 st.subheader(f"🔢 SET {i}")
@@ -150,29 +171,5 @@ elif menu == "📝 Cargar partido":
                 if i==1: s1p1, s1p2 = c1.number_input("P1", 0, 7, key="s1p1"), c2.number_input("P2", 0, 7, key="s1p2")
                 if i==2: s2p1, s2p2 = c1.number_input("P1", 0, 7, key="s2p1"), c2.number_input("P2", 0, 7, key="s2p2")
                 if i==3: s3p1, s3p2 = c1.number_input("P1", 0, 7, key="s3p1"), c2.number_input("P2", 0, 7, key="s3p2")
-
         if st.form_submit_button("💾 GUARDAR PARTIDO", use_container_width=True):
-            # Lógica de validación (7-5/7-6 y no 3er set si 2-0)
-            ganador_s1 = "P1" if s1p1 > s1p2 else "P2"
-            ganador_s2 = "P1" if s2p1 > s2p2 else "P2"
-            
-            if ganador_s1 == ganador_s2 and (s3p1 > 0 or s3p2 > 0):
-                st.error("⚠️ No se carga 3er set si ganaron 2-0.")
-            else:
-                sets_p1 = (1 if s1p1 > s1p2 else 0) + (1 if s2p1 > s2p2 else 0) + (1 if s3p1 > s3p2 else 0)
-                ganadores = [p1j1, p1j2] if sets_p1 >= 2 else [p2j1, p2j2]
-                perdedores = [p2j1, p2j2] if sets_p1 >= 2 else [p1j1, p1j2]
-                res = f"{s1p1}-{s1p2}, {s2p1}-{s2p2}" + (f", {s3p1}-{s3p2}" if (s3p1+s3p2)>0 else "")
-                
-                nueva_fila = pd.DataFrame([{"Fecha": datetime.now().strftime("%d/%m/%Y"), "Ganador1": ganadores[0], "Ganador2": ganadores[1], "Perdedor1": perdedores[0], "Perdedor2": perdedores[1], "Resultado": res}])
-                df_total = pd.concat([df_partidos, nueva_fila], ignore_index=True)
-                conn.update(worksheet="Partidos", data=df_total)
-                st.success("✅ ¡Guardado!")
-
-# --- 4. BUSCAR JUGADOR ---
-elif menu == "🔍 Buscar Jugador":
-    st.title("🔍 Buscar Jugador")
-    nombres = sorted(df_jugadores["Nombre"].tolist())
-    seleccion = st.selectbox("Escribe el nombre del jugador", [""] + nombres)
-    if seleccion:
-        mostrar_perfil(seleccion, df_jugadores)
+            #
