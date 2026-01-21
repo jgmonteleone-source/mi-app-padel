@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Padel Pro App", layout="wide")
 
-# --- CSS FIJO E INAMOVIBLE ---
+# --- CSS FIJO E INAMOVIBLE (VERSION MAESTRA) ---
 st.markdown("""
     <style>
     div[data-testid="stVerticalBlockBorderWrapper"] {
@@ -34,20 +34,25 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
     try:
+        # Cargamos Jugadores y forzamos que los vacíos sean 0
         jugadores = conn.read(worksheet="Jugadores").dropna(subset=["Nombre"])
-        partidos = conn.read(worksheet="Partidos").dropna(subset=["Fecha"])
-        
-        # --- NUEVA LÍNEA: Rellena celdas vacías con 0 en estadísticas ---
-        columnas_stats = ['Puntos', 'PG', 'PP_perd', 'SG', 'SP']
-        for col in columnas_stats:
+        cols_numericas = ['Puntos', 'PG', 'PP_perd', 'SG', 'SP']
+        for col in cols_numericas:
             if col in jugadores.columns:
                 jugadores[col] = pd.to_numeric(jugadores[col]).fillna(0)
         
-        partidos['Fecha'] = pd.to_datetime(partidos['Fecha'], dayfirst=True, errors='coerce')
+        # Cargamos Partidos
+        partidos = conn.read(worksheet="Partidos")
+        # Si la hoja está totalmente vacía (solo encabezados), creamos un DF limpio
+        if partidos.empty:
+            partidos = pd.DataFrame(columns=["Fecha", "Ganador1", "Ganador2", "Perdedor1", "Perdedor2", "Resultado"])
+        else:
+            partidos = partidos.dropna(subset=["Fecha"])
+            partidos['Fecha'] = pd.to_datetime(partidos['Fecha'], dayfirst=True, errors='coerce')
+        
         jugadores['Nombre'] = jugadores['Nombre'].astype(str).str.strip()
         return jugadores, partidos
-    except Exception as e:
-        st.error(f"Error al cargar: {e}")
+    except:
         return pd.DataFrame(), pd.DataFrame()
 
 df_jugadores, df_partidos = cargar_datos()
@@ -55,7 +60,7 @@ df_jugadores, df_partidos = cargar_datos()
 # --- FUNCIÓN FILTRADO ---
 def filtrar_por_fecha(df, opcion):
     hoy = datetime.now()
-    if df.empty: return df
+    if df.empty or 'Fecha' not in df.columns: return df
     if opcion == "Este año": return df[df['Fecha'].dt.year == hoy.year]
     elif opcion == "Año pasado": return df[df['Fecha'].dt.year == hoy.year - 1]
     elif opcion == "Este mes": return df[(df['Fecha'].dt.year == hoy.year) & (df['Fecha'].dt.month == hoy.month)]
@@ -109,18 +114,21 @@ elif menu == "⚔️ H2H":
     nombres = sorted(df_jugadores["Nombre"].tolist())
     j1 = st.selectbox("Jugador 1", nombres, index=0)
     j2 = st.selectbox("Jugador 2", nombres, index=1)
-    mask = (((df_p_filt['Ganador1'] == j1) | (df_p_filt['Ganador2'] == j1) | (df_p_filt['Perdedor1'] == j1) | (df_p_filt['Perdedor2'] == j1)) & ((df_p_filt['Ganador1'] == j2) | (df_p_filt['Ganador2'] == j2) | (df_p_filt['Perdedor1'] == j2) | (df_p_filt['Perdedor2'] == j2)))
-    enf = df_p_filt[mask].copy()
-    v1 = len(enf[(enf['Ganador1'] == j1) | (enf['Ganador2'] == j1)])
-    v2 = len(enf[(enf['Ganador1'] == j2) | (enf['Ganador2'] == j2)])
-    st.markdown("### HISTORIAL:")
-    st.markdown(f"## {j1} {v1} — {v2} {j2}")
-    if not enf.empty:
-        enf['Ganadores'] = enf['Ganador1'] + " / " + enf['Ganador2']
-        enf['Perdedores'] = enf['Perdedor1'] + " / " + enf['Perdedor2']
-        enf['Fecha_str'] = enf['Fecha'].dt.strftime('%d/%m/%Y')
-        st.dataframe(enf[["Fecha_str", "Ganadores", "Perdedores", "Resultado"]], hide_index=True, use_container_width=True)
-    else: st.info("No hay enfrentamientos.")
+    
+    if not df_p_filt.empty:
+        mask = (((df_p_filt['Ganador1'] == j1) | (df_p_filt['Ganador2'] == j1) | (df_p_filt['Perdedor1'] == j1) | (df_p_filt['Perdedor2'] == j1)) & ((df_p_filt['Ganador1'] == j2) | (df_p_filt['Ganador2'] == j2) | (df_p_filt['Perdedor1'] == j2) | (df_p_filt['Perdedor2'] == j2)))
+        enf = df_p_filt[mask].copy()
+        v1 = len(enf[(enf['Ganador1'] == j1) | (enf['Ganador2'] == j1)])
+        v2 = len(enf[(enf['Ganador1'] == j2) | (enf['Ganador2'] == j2)])
+        st.markdown("### HISTORIAL:")
+        st.markdown(f"## {j1} {v1} — {v2} {j2}")
+        if not enf.empty:
+            enf['Ganadores'] = enf['Ganador1'].astype(str) + " / " + enf['Ganador2'].astype(str)
+            enf['Perdedores'] = enf['Perdedor1'].astype(str) + " / " + enf['Perdedor2'].astype(str)
+            enf['Fecha_str'] = enf['Fecha'].dt.strftime('%d/%m/%Y')
+            st.dataframe(enf[["Fecha_str", "Ganadores", "Perdedores", "Resultado"]], hide_index=True, use_container_width=True)
+        else: st.info("No hay enfrentamientos.")
+    else: st.info("No hay partidos registrados.")
 
 # --- 3. CARGAR PARTIDO ---
 elif menu == "📝 Cargar partido":
@@ -145,26 +153,20 @@ elif menu == "📝 Cargar partido":
         if st.form_submit_button("💾 GUARDAR PARTIDO", use_container_width=True):
             ganador_s1 = "P1" if s1p1 > s1p2 else ("P2" if s1p2 > s1p1 else "Empate")
             ganador_s2 = "P1" if s2p1 > s2p2 else ("P2" if s2p2 > s2p1 else "Empate")
-            
-            # Lista de jugadores seleccionados para validar duplicados
             jugadores_partido = [p1j1, p1j2, p2j1, p2j2]
             
             error = False
-            # 1. Condición Primaria: No repetir jugador
             if len(jugadores_partido) != len(set(jugadores_partido)):
                 st.error("⚠️ No puede repetirse un jugador.")
                 error = True
-            # 2. Validación de Empate
             elif (s1p1 == s1p2) or (s2p1 == s2p2) or (s3p1 == s3p2 and (s3p1 > 0 or s3p2 > 0)):
                 st.error("⚠️ No puede haber empate en un set.")
                 error = True
-            # 3. Condición de juegos #7
             elif (s1p1 == 7 and s1p2 not in [5,6]) or (s1p2 == 7 and s1p1 not in [5,6]) or \
                  (s2p1 == 7 and s2p2 not in [5,6]) or (s2p2 == 7 and s2p1 not in [5,6]) or \
                  (s3p1 == 7 and s3p2 not in [5,6]) or (s3p2 == 7 and s3p1 not in [5,6]):
                 st.error("⚠️ Si una pareja obtuvo 7 juegos, el rival debe tener 5 o 6.")
                 error = True
-            # 4. Condición del 3er set
             elif ganador_s1 == ganador_s2 and (s3p1 > 0 or s3p2 > 0):
                 st.error("⚠️ No se puede cargar un 3er set si una pareja ya ganó 2-0.")
                 error = True
@@ -177,10 +179,15 @@ elif menu == "📝 Cargar partido":
                 ganadores = [p1j1, p1j2] if sets_p1 >= 2 else [p2j1, p2j2]
                 perdedores = [p2j1, p2j2] if sets_p1 >= 2 else [p1j1, p1j2]
                 res = f"{s1p1}-{s1p2}, {s2p1}-{s2p2}" + (f", {s3p1}-{s3p2}" if (s3p1+s3p2)>0 else "")
+                
                 nueva_fila = pd.DataFrame([{"Fecha": datetime.now().strftime("%d/%m/%Y"), "Ganador1": ganadores[0], "Ganador2": ganadores[1], "Perdedor1": perdedores[0], "Perdedor2": perdedores[1], "Resultado": res}])
-                df_total = pd.concat([df_partidos, nueva_fila], ignore_index=True)
+                
+                # RECARGA SEGURA PARA NO SOBREESCRIBIR
+                _, df_actual = cargar_datos()
+                df_total = pd.concat([df_actual, nueva_fila], ignore_index=True)
                 conn.update(worksheet="Partidos", data=df_total)
                 st.success("✅ ¡Guardado!")
+                st.cache_data.clear()
 
 # --- 4. BUSCAR JUGADOR ---
 elif menu == "🔍 Buscar Jugador":
