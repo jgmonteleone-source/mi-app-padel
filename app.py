@@ -126,7 +126,6 @@ elif menu == "📝 Cargar partido":
             st.subheader("👥 Pareja 2")
             p2j1, p2j2 = st.selectbox("Jugador C", nombres, key="c"), st.selectbox("Jugador D", nombres, key="d")
         
-        # Bloques de SET con nombres "Pareja 1" y "Pareja 2"
         for i in [1, 2, 3]:
             with st.container(border=True):
                 st.subheader(f"🔢 SET {i}")
@@ -150,9 +149,12 @@ elif menu == "📝 Cargar partido":
                  (s3p1 == 7 and s3p2 not in [5,6]) or (s3p2 == 7 and s3p1 not in [5,6]):
                 st.error("⚠️ Condición de 7: Si un equipo llega a 7, el rival debe tener 5 o 6.")
                 error = True
-            # 3. Condición del 3er set
+            # 3. Condición del 3er set (Innecesario vs Obligatorio)
             elif ganador_s1 == ganador_s2 and (s3p1 > 0 or s3p2 > 0):
                 st.error("⚠️ No se puede cargar un 3er set si una pareja ya ganó 2-0.")
+                error = True
+            elif ganador_s1 != ganador_s2 and (s3p1 == 0 and s3p2 == 0):
+                st.error("⚠️ Es obligatorio cargar el 3er set si el partido está empatado 1-1.")
                 error = True
             
             if not error:
