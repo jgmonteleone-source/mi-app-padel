@@ -6,11 +6,30 @@ from datetime import datetime, timedelta
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Padel Pro App", layout="wide")
 
-# Estilo CSS para forzar alineación a la izquierda y quitar márgenes innecesarios
+# CSS REFORZADO PARA MÓVIL (Alineación izquierda y filas compactas)
 st.markdown("""
     <style>
-    .stButton button { width: 100%; text-align: left !important; padding-left: 0px; }
-    [data-testid="column"] { display: flex; align-items: center; }
+    /* Alinea el contenido de las columnas a la izquierda */
+    [data-testid="column"] {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start !important;
+        text-align: left !important;
+    }
+    /* Estilo para los botones de nombre en el ranking */
+    .stButton > button {
+        border: none;
+        background: transparent;
+        color: #007bff;
+        text-decoration: underline;
+        text-align: left !important;
+        padding: 0px;
+        font-weight: bold;
+    }
+    /* Quitar espacios entre elementos de la lista */
+    .stVerticalBlock {
+        gap: 0.5rem;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -23,12 +42,8 @@ def cargar_datos():
         jugadores = conn.read(worksheet="Jugadores").dropna(subset=["Nombre"])
         partidos = conn.read(worksheet="Partidos").dropna(subset=["Fecha"])
         partidos['Fecha'] = pd.to_datetime(partidos['Fecha'], dayfirst=True, errors='coerce')
-        
-        # LIMPIEZA EXTREMA DE DATOS
         jugadores['Nombre'] = jugadores['Nombre'].astype(str).str.strip()
-        # Limpiamos la URL de la foto eliminando cualquier cosa que no sea el link
         jugadores['Foto'] = jugadores['Foto'].astype(str).str.strip().str.replace(r'[\\"\']', '', regex=True)
-        
         return jugadores, partidos
     except Exception as e:
         st.error(f"Error: {e}")
@@ -36,7 +51,7 @@ def cargar_datos():
 
 df_jugadores, df_partidos = cargar_datos()
 
-# --- FUNCIÓN DE FILTRADO CON "MES PASADO" ---
+# --- FILTROS ---
 def filtrar_por_fecha(df, opcion):
     hoy = datetime.now()
     if df.empty: return df
@@ -57,42 +72,48 @@ def filtrar_por_fecha(df, opcion):
 def mostrar_perfil(nombre_jugador, df_jugadores):
     datos = df_jugadores[df_jugadores['Nombre'] == nombre_jugador].iloc[0]
     c1, c2 = st.columns(2)
-    c1.metric("Victorias", int(datos['PG']))
-    c2.metric("Derrotas", int(datos['PP_perd']))
-    
+    c1.metric("Ganados", int(datos['PG']))
+    c2.metric("Perdidos", int(datos['PP_perd']))
     total = int(datos['PG']) + int(datos['PP_perd'])
     if total > 0:
         efect = (int(datos['PG']) / total) * 100
         st.write(f"**Efectividad: {efect:.1f}%**")
         st.progress(efect / 100)
-    st.write(f"Puntos Acumulados: {int(datos['Puntos'])}")
+    st.write(f"Puntos Totales: {int(datos['Puntos'])}")
 
 # --- MENÚ ---
 menu = st.sidebar.radio("MENÚ", ["🏆 Ranking", "⚔️ H2H (Cara a Cara)", "📝 Cargar Partido", "👤 Gestionar Jugadores"])
 
 # --- 1. RANKING ---
 if menu == "🏆 Ranking":
-    rango = st.selectbox("Periodo", ["Siempre", "Este año", "Año pasado", "Este mes", "Mes pasado"], key="filt_rank")
+    rango = st.selectbox("Filtrar por fecha", ["Siempre", "Este año", "Año pasado", "Este mes", "Mes pasado"], key="filt_rank")
     st.title("🏆 Ranking")
     
     if not df_jugadores.empty:
         df_jugadores["Puntos"] = pd.to_numeric(df_jugadores["Puntos"], errors='coerce').fillna(0)
         df_rank = df_jugadores.sort_values(by="Puntos", ascending=False).reset_index(drop=True)
         
+        # Cabecera simple
+        h1, h2, h3, h4 = st.columns([1, 1.5, 5, 2])
+        h1.write("**#**")
+        h2.write("**Foto**")
+        h3.write("**Jugador**")
+        h4.write("**Pts**")
+        st.divider()
+
         for i, row in df_rank.iterrows():
-            # Columnas ajustadas: #[1], Foto[1], Nombre[6], Puntos[2] para móvil
-            c1, c2, c3, c4 = st.columns([1, 1.5, 6, 1.5])
+            # Definimos las columnas con proporciones que fuerzan la línea única
+            c1, c2, c3, c4 = st.columns([1, 1.5, 5, 2])
             
-            with c1: st.write(f"#{i+1}")
+            with c1: st.write(f"{i+1}")
             
             with c2:
                 url_f = row["Foto"]
-                # Si la URL parece válida, la mostramos. Si no, silueta.
                 f_final = url_f if url_f.startswith("http") else "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-                st.image(f_final, width=40) 
+                st.image(f_final, width=35) 
                 
             with c3:
-                # Botón alineado a la izquierda mediante el CSS superior
+                # El botón ahora parece un link alineado a la izquierda
                 if st.button(row['Nombre'], key=f"btn_{row['Nombre']}"):
                     mostrar_perfil(row['Nombre'], df_jugadores)
             
@@ -102,7 +123,7 @@ if menu == "🏆 Ranking":
 # --- 2. H2H ---
 elif menu == "⚔️ H2H (Cara a Cara)":
     rango_h2h = st.selectbox("Periodo", ["Siempre", "Este año", "Año pasado", "Este mes", "Mes pasado"], key="filt_h2h")
-    st.title("⚔️ Cara a Cara")
+    st.title("⚔️ H2H")
     df_p_filt = filtrar_por_fecha(df_partidos, rango_h2h)
     nombres = sorted(df_jugadores["Nombre"].tolist())
     j1 = st.selectbox("Jugador 1", nombres, index=0)
