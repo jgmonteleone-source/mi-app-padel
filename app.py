@@ -33,6 +33,7 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
+    st.cache_data.clear()
     try:
         jugadores = conn.read(worksheet="Jugadores").dropna(subset=["Nombre"])
         partidos = conn.read(worksheet="Partidos").dropna(subset=["Fecha"])
