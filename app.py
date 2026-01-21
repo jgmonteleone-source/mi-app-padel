@@ -6,34 +6,49 @@ from datetime import datetime
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Padel Pro App", layout="wide")
 
-# --- CSS PARA CENTRADO Y SOMBRAS ---
+# --- CSS INYECTADO (ESTO NO LO ROMPE EL MÓVIL) ---
 st.markdown("""
     <style>
-    /* Forzar sombra y bordes en tarjetas */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        box-shadow: 0px 8px 16px rgba(0,0,0,0.1) !important;
-        border-radius: 15px !important;
-        padding: 20px !important;
-        background-color: white !important;
-        border: 1px solid #eee !important;
+    /* Estilo de la Tarjeta */
+    .card-ranking {
+        background-color: white;
+        border-radius: 15px;
+        padding: 20px;
+        margin: 15px auto;
+        text-align: center;
+        box-shadow: 0px 10px 25px rgba(0,0,0,0.2) !important; /* Sombra pronunciada */
+        border: 1px solid #eee;
+        max-width: 300px; /* Tamaño ideal para móvil */
     }
     
-    /* Centrado de todo el contenido del ranking */
-    [data-testid="column"] {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
+    .card-ranking img {
+        border-radius: 50%;
+        width: 100px;
+        height: 100px;
+        object-fit: cover;
+        margin-bottom: 10px;
+        cursor: pointer;
+        border: 3px solid #007bff;
     }
 
-    .stButton > button {
-        border: none;
-        background: transparent;
+    .card-ranking h2 {
         color: #007bff;
+        margin: 10px 0;
+        font-size: 22px;
+        text-decoration: underline;
+    }
+
+    .puesto-label {
+        font-size: 14px;
+        color: #777;
         font-weight: bold;
-        font-size: 20px;
-        margin: 0 auto;
-        display: block;
+        text-transform: uppercase;
+    }
+
+    .puntos-label {
+        font-size: 18px;
+        font-weight: bold;
+        color: #333;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -43,7 +58,6 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
     try:
-        # Cargamos siempre sin cache para evitar el problema de sobreescritura por datos viejos
         jugadores = conn.read(worksheet="Jugadores").dropna(subset=["Nombre"])
         partidos = conn.read(worksheet="Partidos").dropna(subset=["Fecha"])
         return jugadores, partidos
@@ -74,82 +88,71 @@ def mostrar_perfil(nombre_jugador, df_jugadores):
         st.progress(efect / 100)
 
 # --- MENÚ ---
-menu = st.sidebar.radio("MENÚ", ["🏆 Ranking", "⚔️ H2H", "📝 Cargar partido", "🔍 Buscar jugador"])
+menu = st.sidebar.radio("MENÚ", ["🏆 Ranking", "⚔️ H2H", "📝 Cargar partido", "🔍 Buscar"])
 
-# --- 1. RANKING (CON FOTO CLICKABLE Y CENTRADA) ---
+# --- 1. RANKING (HTML PURO PARA MÓVIL) ---
 if menu == "🏆 Ranking":
     st.title("🏆 Ranking")
     df_rank = df_jugadores.sort_values(by="Puntos", ascending=False).reset_index(drop=True)
 
     for i, row in df_rank.iterrows():
-        with st.container(border=True):
-            st.write(f"**PUESTO #{i+1}**")
-            img_url = row['Foto'] if str(row['Foto']).startswith("http") else "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-            
-            # Truco para que la foto sea centrada y clickable
-            col1, col2, col3 = st.columns([1,2,1])
-            with col2:
-                if st.button("", key=f"img_{row['Nombre']}"): # Botón invisible sobre la imagen
-                    mostrar_perfil(row['Nombre'], df_jugadores)
-                st.image(img_url, width=120)
-                if st.button(row['Nombre'], key=f"txt_{row['Nombre']}"):
-                    mostrar_perfil(row['Nombre'], df_jugadores)
-            
-            st.markdown(f"**{int(row['Puntos'])} PUNTOS**")
+        img_url = row['Foto'] if str(row['Foto']).startswith("http") else "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+        
+        # Creamos la tarjeta con HTML
+        st.markdown(f"""
+            <div class="card-ranking">
+                <div class="puesto-label">Puesto #{i+1}</div>
+                <img src="{img_url}">
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # El botón de Streamlit para abrir la ficha (debajo de la imagen HTML)
+        if st.button(row['Nombre'], key=f"btn_{row['Nombre']}", use_container_width=True):
+            mostrar_perfil(row['Nombre'], df_jugadores)
+        
+        st.markdown(f"<div class='puntos-label'>{int(row['Puntos'])} Puntos</div><br>", unsafe_allow_html=True)
 
-# --- 3. CARGAR PARTIDO (CON LÓGICA DE 2 SETS Y NO SOBREESCRITURA) ---
+# --- 3. CARGAR PARTIDO (LÓGICA ACTUALIZADA) ---
 elif menu == "📝 Cargar partido":
     st.title("📝 Registrar Partido")
     nombres = sorted(df_jugadores["Nombre"].tolist())
     
     with st.form("form_partido"):
-        with st.container(border=True):
-            st.subheader("🎾 Pareja 1")
-            p1j1, p1j2 = st.selectbox("Jugador 1", nombres), st.selectbox("Jugador 2", nombres)
-        with st.container(border=True):
-            st.subheader("🎾 Pareja 2")
-            p2j1, p2j2 = st.selectbox("Jugador 3", nombres), st.selectbox("Jugador 4", nombres)
+        st.subheader("🎾 Equipos")
+        p1j1, p1j2 = st.selectbox("Pareja 1 - J1", nombres), st.selectbox("Pareja 1 - J2", nombres)
+        p2j1, p2j2 = st.selectbox("Pareja 2 - J1", nombres), st.selectbox("Pareja 2 - J2", nombres)
         
-        # Inputs de Sets
-        with st.container(border=True):
-            st.subheader("🔢 SET 1")
-            c1, c2 = st.columns(2)
-            s1p1 = c1.number_input("Pareja 1 ", 0, 7, key="s1p1")
-            s1p2 = c2.number_input("Pareja 2 ", 0, 7, key="s1p2")
-        with st.container(border=True):
-            st.subheader("🔢 SET 2")
-            c1, c2 = st.columns(2)
-            s2p1 = c1.number_input("Pareja 1  ", 0, 7, key="s2p1")
-            s2p2 = c2.number_input("Pareja 2  ", 0, 7, key="s2p2")
-        with st.container(border=True):
-            st.subheader("🔢 SET 3 (Si aplica)")
-            c1, c2 = st.columns(2)
-            s3p1 = c1.number_input("Pareja 1   ", 0, 7, key="s3p1")
-            s3p2 = c2.number_input("Pareja 2   ", 0, 7, key="s3p2")
+        st.subheader("🔢 Resultados")
+        c1, c2 = st.columns(2)
+        s1p1 = c1.number_input("Set 1 - P1", 0, 7)
+        s1p2 = c2.number_input("Set 1 - P2", 0, 7)
+        s2p1 = c1.number_input("Set 2 - P1", 0, 7)
+        s2p2 = c2.number_input("Set 2 - P2", 0, 7)
+        s3p1 = c1.number_input("Set 3 - P1", 0, 7)
+        s3p2 = c2.number_input("Set 3 - P2", 0, 7)
 
-        if st.form_submit_button("💾 GUARDAR PARTIDO", use_container_width=True):
-            # 1. Validar si ya hubo un ganador en 2 sets
+        if st.form_submit_button("💾 GUARDAR PARTIDO"):
+            # Lógica de validación
             ganador_s1 = "P1" if s1p1 > s1p2 else "P2"
             ganador_s2 = "P1" if s2p1 > s2p2 else "P2"
             
             error = False
+            # Regra 2-0 no necesita 3er set
             if ganador_s1 == ganador_s2 and (s3p1 > 0 or s3p2 > 0):
-                st.error("⚠️ No se puede cargar un 3er set si una pareja ya ganó 2-0.")
+                st.error("⚠️ No se puede cargar un 3er set si ya ganaron 2-0.")
                 error = True
             
-            # 2. Validar regla del 7-5/7-6
-            for s1, s2 in [(s1p1, s1p2), (s2p1, s2p2), (s3p1, s3p2)]:
-                if (s1 == 7 and s2 not in [5, 6]) or (s2 == 7 and s1 not in [5, 6]):
-                    st.error("⚠️ Resultado inválido: Si un set es 7, el otro debe ser 5 o 6.")
+            # Regra 7-5 / 7-6
+            for sA, sB in [(s1p1, s1p2), (s2p1, s2p2), (s3p1, s3p2)]:
+                if (sA == 7 and sB not in [5, 6]) or (sB == 7 and sA not in [5, 6]):
+                    st.error("⚠️ Error: Si un set es 7, el otro debe ser 5 o 6.")
                     error = True
 
             if not error:
-                # Determinar Ganadores Finales
+                # Determinar ganador final
                 sets_p1 = (1 if s1p1 > s1p2 else 0) + (1 if s2p1 > s2p2 else 0) + (1 if s3p1 > s3p2 else 0)
-                sets_p2 = (1 if s1p2 > s1p1 else 0) + (1 if s2p2 > s2p1 else 0) + (1 if s3p2 > s3p1 else 0)
-                
-                ganadores = [p1j1, p1j2] if sets_p1 > sets_p2 else [p2j1, p2j2]
-                perdedores = [p2j1, p2j2] if sets_p1 > sets_p2 else [p1j1, p1j2]
+                ganadores = [p1j1, p1j2] if sets_p1 >= 2 else [p2j1, p2j2]
+                perdedores = [p2j1, p2j2] if sets_p1 >= 2 else [p1j1, p1j2]
                 res_str = f"{s1p1}-{s1p2}, {s2p1}-{s2p2}" + (f", {s3p1}-{s3p2}" if (s3p1+s3p2)>0 else "")
                 
                 nueva_fila = pd.DataFrame([{
@@ -159,9 +162,9 @@ elif menu == "📝 Cargar partido":
                     "Resultado": res_str
                 }])
                 
-                # RECARGAR DATOS ANTES DE ACTUALIZAR PARA NO SOBREESCRIBIR
+                # Cargar partidos actuales para concatenar y no sobreescribir
                 _, df_partidos_actual = cargar_datos()
                 df_final = pd.concat([df_partidos_actual, nueva_fila], ignore_index=True)
                 conn.update(worksheet="Partidos", data=df_final)
-                st.success("✅ Partido guardado y ranking actualizado.")
+                st.success("✅ ¡Guardado!")
                 st.cache_data.clear()
