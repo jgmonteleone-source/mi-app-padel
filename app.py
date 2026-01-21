@@ -6,10 +6,9 @@ from datetime import datetime, timedelta
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Padel Pro App", layout="wide")
 
-# --- CSS FIJO E INAMOVIBLE (DISEÑO SEGURO) ---
+# --- CSS FIJO E INAMOVIBLE ---
 st.markdown("""
     <style>
-    /* Forzar sombras potentes en Ranking y Bloques de Carga */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         box-shadow: 0px 10px 30px rgba(0,0,0,0.2) !important;
         border-radius: 15px !important;
@@ -18,36 +17,15 @@ st.markdown("""
         border: 1px solid #f0f0f0 !important;
         margin-bottom: 25px !important;
     }
-    
-    /* Estilo de la tarjeta de Ranking */
-    .ranking-card {
-        text-align: center;
-    }
+    .ranking-card { text-align: center; }
     .ranking-card img {
-        width: 140px;
-        height: 140px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 4px solid #007bff;
-        margin: 0 auto 15px auto;
-        display: block;
+        width: 140px; height: 140px; border-radius: 50%;
+        object-fit: cover; border: 4px solid #007bff;
+        margin: 0 auto 15px auto; display: block;
     }
-    .ranking-name {
-        font-size: 24px;
-        font-weight: bold;
-        color: #333;
-    }
-    .ranking-points {
-        font-size: 20px;
-        color: #007bff;
-        font-weight: bold;
-        margin-top: 5px;
-    }
-    .filtro-resaltado {
-        font-size: 19px;
-        font-weight: bold;
-        margin-bottom: 5px;
-    }
+    .ranking-name { font-size: 24px; font-weight: bold; color: #333; }
+    .ranking-points { font-size: 20px; color: #007bff; font-weight: bold; margin-top: 5px; }
+    .filtro-resaltado { font-size: 19px; font-weight: bold; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -106,20 +84,11 @@ if menu == "🏆 Ranking":
     st.markdown('<p class="filtro-resaltado">Periodo</p>', unsafe_allow_html=True)
     rango = st.selectbox("", ["Siempre", "Este año", "Año pasado", "Este mes", "Mes pasado"], label_visibility="collapsed")
     st.title("🏆 Ranking")
-    
     df_rank = df_jugadores.sort_values(by="Puntos", ascending=False).reset_index(drop=True)
-
     for i, row in df_rank.iterrows():
         with st.container(border=True):
             img_url = row['Foto'] if str(row['Foto']).startswith("http") else "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
-            st.markdown(f"""
-                <div class="ranking-card">
-                    <div style="color: #888; font-weight: bold;">PUESTO #{i+1}</div>
-                    <img src="{img_url}">
-                    <div class="ranking-name">{row['Nombre']}</div>
-                    <div class="ranking-points">{int(row['Puntos'])} PUNTOS</div>
-                </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f"""<div class="ranking-card"><div style="color: #888; font-weight: bold;">PUESTO #{i+1}</div><img src="{img_url}"><div class="ranking-name">{row['Nombre']}</div><div class="ranking-points">{int(row['Puntos'])} PUNTOS</div></div>""", unsafe_allow_html=True)
             if st.button("Ver Ficha", key=f"btn_{row['Nombre']}", use_container_width=True):
                 mostrar_perfil(row['Nombre'], df_jugadores)
 
@@ -128,31 +97,22 @@ elif menu == "⚔️ H2H":
     st.markdown('<p class="filtro-resaltado">Periodo</p>', unsafe_allow_html=True)
     rango_h2h = st.selectbox("", ["Siempre", "Este año", "Año pasado", "Este mes", "Mes pasado"], label_visibility="collapsed")
     st.title("⚔️ Cara a Cara")
-    
     df_p_filt = filtrar_por_fecha(df_partidos, rango_h2h)
     nombres = sorted(df_jugadores["Nombre"].tolist())
     j1 = st.selectbox("Jugador 1", nombres, index=0)
     j2 = st.selectbox("Jugador 2", nombres, index=1)
-
-    mask = (
-        ((df_p_filt['Ganador1'] == j1) | (df_p_filt['Ganador2'] == j1) | (df_p_filt['Perdedor1'] == j1) | (df_p_filt['Perdedor2'] == j1)) &
-        ((df_p_filt['Ganador1'] == j2) | (df_p_filt['Ganador2'] == j2) | (df_p_filt['Perdedor1'] == j2) | (df_p_filt['Perdedor2'] == j2))
-    )
+    mask = (((df_p_filt['Ganador1'] == j1) | (df_p_filt['Ganador2'] == j1) | (df_p_filt['Perdedor1'] == j1) | (df_p_filt['Perdedor2'] == j1)) & ((df_p_filt['Ganador1'] == j2) | (df_p_filt['Ganador2'] == j2) | (df_p_filt['Perdedor1'] == j2) | (df_p_filt['Perdedor2'] == j2)))
     enf = df_p_filt[mask].copy()
-    
     v1 = len(enf[(enf['Ganador1'] == j1) | (enf['Ganador2'] == j1)])
     v2 = len(enf[(enf['Ganador1'] == j2) | (enf['Ganador2'] == j2)])
-    
     st.markdown("### HISTORIAL:")
     st.markdown(f"## {j1} {v1} — {v2} {j2}")
-    
     if not enf.empty:
         enf['Ganadores'] = enf['Ganador1'] + " / " + enf['Ganador2']
         enf['Perdedores'] = enf['Perdedor1'] + " / " + enf['Perdedor2']
         enf['Fecha_str'] = enf['Fecha'].dt.strftime('%d/%m/%Y')
         st.dataframe(enf[["Fecha_str", "Ganadores", "Perdedores", "Resultado"]], hide_index=True, use_container_width=True)
-    else:
-        st.info("No hay enfrentamientos en este periodo.")
+    else: st.info("No hay enfrentamientos.")
 
 # --- 3. CARGAR PARTIDO ---
 elif menu == "📝 Cargar partido":
@@ -166,34 +126,33 @@ elif menu == "📝 Cargar partido":
             st.subheader("👥 Pareja 2")
             p2j1, p2j2 = st.selectbox("Jugador C", nombres, key="c"), st.selectbox("Jugador D", nombres, key="d")
         
-        with st.container(border=True):
-            st.subheader("🔢 SET 1")
-            c1, c2 = st.columns(2)
-            s1p1 = c1.number_input("P1", 0, 7, key="s1p1")
-            s1p2 = c2.number_input("P2", 0, 7, key="s1p2")
-        with st.container(border=True):
-            st.subheader("🔢 SET 2")
-            c1, c2 = st.columns(2)
-            s2p1 = c1.number_input("P1", 0, 7, key="s2p1")
-            s2p2 = c2.number_input("P2", 0, 7, key="s2p2")
-        with st.container(border=True):
-            st.subheader("🔢 SET 3")
-            c1, c2 = st.columns(2)
-            s3p1 = c1.number_input("P1", 0, 7, key="s3p1")
-            s3p2 = c2.number_input("P2", 0, 7, key="s3p2")
+        # Bloques de SET con nombres "Pareja 1" y "Pareja 2"
+        for i in [1, 2, 3]:
+            with st.container(border=True):
+                st.subheader(f"🔢 SET {i}")
+                c1, c2 = st.columns(2)
+                if i==1: s1p1, s1p2 = c1.number_input("Pareja 1", 0, 7, key="s1p1"), c2.number_input("Pareja 2", 0, 7, key="s1p2")
+                if i==2: s2p1, s2p2 = c1.number_input("Pareja 1 ", 0, 7, key="s2p1"), c2.number_input("Pareja 2 ", 0, 7, key="s2p2")
+                if i==3: s3p1, s3p2 = c1.number_input("Pareja 1  ", 0, 7, key="s3p1"), c2.number_input("Pareja 2  ", 0, 7, key="s3p2")
 
         if st.form_submit_button("💾 GUARDAR PARTIDO", use_container_width=True):
-            ganador_s1 = "P1" if s1p1 > s1p2 else "P2"
-            ganador_s2 = "P1" if s2p1 > s2p2 else "P2"
+            ganador_s1 = "P1" if s1p1 > s1p2 else ("P2" if s1p2 > s1p1 else "Empate")
+            ganador_s2 = "P1" if s2p1 > s2p2 else ("P2" if s2p2 > s2p1 else "Empate")
             
             error = False
-            if (s1p1 == 7 and s1p2 not in [5,6]) or (s1p2 == 7 and s1p1 not in [5,6]) or \
-               (s2p1 == 7 and s2p2 not in [5,6]) or (s2p2 == 7 and s2p1 not in [5,6]) or \
-               (s3p1 == 7 and s3p2 not in [5,6]) or (s3p2 == 7 and s3p1 not in [5,6]):
-                st.error("⚠️ Regla del 7: El rival debe tener 5 o 6.")
+            # 1. Validación de Empate
+            if (s1p1 == s1p2) or (s2p1 == s2p2) or (s3p1 == s3p2 and (s3p1 > 0 or s3p2 > 0)):
+                st.error("⚠️ No puede haber empate en un set.")
                 error = True
+            # 2. Condición del juego #7
+            elif (s1p1 == 7 and s1p2 not in [5,6]) or (s1p2 == 7 and s1p1 not in [5,6]) or \
+                 (s2p1 == 7 and s2p2 not in [5,6]) or (s2p2 == 7 and s2p1 not in [5,6]) or \
+                 (s3p1 == 7 and s3p2 not in [5,6]) or (s3p2 == 7 and s3p1 not in [5,6]):
+                st.error("⚠️ Condición de 7: Si un equipo llega a 7, el rival debe tener 5 o 6.")
+                error = True
+            # 3. Condición del 3er set
             elif ganador_s1 == ganador_s2 and (s3p1 > 0 or s3p2 > 0):
-                st.error("⚠️ No se carga 3er set si ganaron 2-0.")
+                st.error("⚠️ No se puede cargar un 3er set si una pareja ya ganó 2-0.")
                 error = True
             
             if not error:
