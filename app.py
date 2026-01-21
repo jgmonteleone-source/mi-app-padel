@@ -138,18 +138,25 @@ elif menu == "📝 Cargar partido":
             ganador_s1 = "P1" if s1p1 > s1p2 else ("P2" if s1p2 > s1p1 else "Empate")
             ganador_s2 = "P1" if s2p1 > s2p2 else ("P2" if s2p2 > s2p1 else "Empate")
             
+            # Lista de jugadores seleccionados para validar duplicados
+            jugadores_partido = [p1j1, p1j2, p2j1, p2j2]
+            
             error = False
-            # 1. Validación de Empate
-            if (s1p1 == s1p2) or (s2p1 == s2p2) or (s3p1 == s3p2 and (s3p1 > 0 or s3p2 > 0)):
+            # 1. Condición Primaria: No repetir jugador
+            if len(jugadores_partido) != len(set(jugadores_partido)):
+                st.error("⚠️ No puede repetirse un jugador.")
+                error = True
+            # 2. Validación de Empate
+            elif (s1p1 == s1p2) or (s2p1 == s2p2) or (s3p1 == s3p2 and (s3p1 > 0 or s3p2 > 0)):
                 st.error("⚠️ No puede haber empate en un set.")
                 error = True
-            # 2. Condición del juego #7
+            # 3. Condición de juegos #7
             elif (s1p1 == 7 and s1p2 not in [5,6]) or (s1p2 == 7 and s1p1 not in [5,6]) or \
                  (s2p1 == 7 and s2p2 not in [5,6]) or (s2p2 == 7 and s2p1 not in [5,6]) or \
                  (s3p1 == 7 and s3p2 not in [5,6]) or (s3p2 == 7 and s3p1 not in [5,6]):
-                st.error("⚠️ Condición de 7: Si un equipo llega a 7, el rival debe tener 5 o 6.")
+                st.error("⚠️ Si una pareja obtuvo 7 juegos, el rival debe tener 5 o 6.")
                 error = True
-            # 3. Condición del 3er set (Innecesario vs Obligatorio)
+            # 4. Condición del 3er set
             elif ganador_s1 == ganador_s2 and (s3p1 > 0 or s3p2 > 0):
                 st.error("⚠️ No se puede cargar un 3er set si una pareja ya ganó 2-0.")
                 error = True
