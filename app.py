@@ -93,62 +93,66 @@ elif menu == "📝 Cargar Partido":
             if len({p1j1, p1j2, p2j1, p2j2}) < 4:
                 st.error("Error: Hay jugadores repetidos.")
             else:
-                # Calculo de Sets y Ganador
+                # 1. Cálculo de Sets y Ganador
                 sets_p1 = (1 if p1s1 > p2s1 else 0) + (1 if p1s2 > p2s2 else 0) + (1 if p1s3 > p2s3 else 0)
                 sets_p2 = (1 if p2s1 > p1s1 else 0) + (1 if p2s2 > p1s2 else 0) + (1 if p2s3 > p1s3 else 0)
                 
                 if sets_p1 == sets_p2:
                     st.error("El partido no puede quedar en empate.")
                 else:
-                    ganadores = [p1j1, p1j2] if sets_p1 > sets_p2 else [p2j1, p2j2]
-                    perdedores = [p2j1, p2j2] if sets_p1 > sets_p2 else [p1j1, p1j2]
-                    
-                    # Puntos segun tu regla (3, 2, 1, 0)
-                    if sets_p1 > sets_p2: # Gana Pareja 1
-                        pts_g = 3 if sets_p2 == 0 else 2
-                        pts_p = 1 if sets_p2 == 1 else 0
-                        sg_gan, sp_gan = sets_p1, sets_p2
-                        gg_gan = p1s1 + p1s2 + p1s3
-                        gp_gan = p2s1 + p2s2 + p2s3
-                    else: # Gana Pareja 2
-                        pts_g = 3 if sets_p1 == 0 else 2
-                        pts_p = 1 if sets_p1 == 1 else 0
-                        sg_gan, sp_gan = sets_p2, sets_p1
-                        gg_gan = p2s1 + p2s2 + p2s3
-                        gp_gan = p1s1 + p1s2 + p1s3
+                    # Determinar puntos y estadísticas
+                    if sets_p1 > sets_p2:
+                        ganadores, perdedores = [p1j1, p1j2], [p2j1, p2j2]
+                        pts_g, pts_p = (3 if sets_p2 == 0 else 2), (1 if sets_p2 == 1 else 0)
+                        # Stats para ganadores
+                        sg_gan, sp_gan, gg_gan, gp_gan = sets_p1, sets_p2, (p1s1+p1s2+p1s3), (p2s1+p2s2+p2s3)
+                    else:
+                        ganadores, perdedores = [p2j1, p2j2], [p1j1, p1j2]
+                        pts_g, pts_p = (3 if sets_p1 == 0 else 2), (1 if sets_p1 == 1 else 0)
+                        # Stats para ganadores
+                        sg_gan, sp_gan, gg_gan, gp_gan = sets_p2, sets_p1, (p2s1+p2s2+p2s3), (p1s1+p1s2+p1s3)
 
-                    # Actualizar DataFrame de Jugadores (Memoria local antes de subir)
+                    # 2. ACTUALIZACIÓN DE JUGADORES (EL AJUSTE CLAVE)
+                    # Limpiamos nombres para evitar errores de coincidencia
+                    df_jugadores['Nombre'] = df_jugadores['Nombre'].str.strip()
+
                     for j in ganadores:
-                        idx = df_jugadores.index[df_jugadores['Nombre'] == j][0]
-                        df_jugadores.at[idx, 'Puntos'] += pts_g
-                        df_jugadores.at[idx, 'PG'] += 1
-                        df_jugadores.at[idx, 'PP'] += 1
-                        df_jugadores.at[idx, 'SG'] += sg_gan
-                        df_jugadores.at[idx, 'SP'] += sp_gan
-                        df_jugadores.at[idx, 'GG'] += gg_gan
-                        df_jugadores.at[idx, 'GP'] += gp_gan
+                        idx_list = df_jugadores.index[df_jugadores['Nombre'].str.lower() == j.strip().lower()].tolist()
+                        if idx_list:
+                            idx = idx_list[0]
+                            # Usamos fillna(0) por si la celda de Excel está vacía
+                            df_jugadores.at[idx, 'Puntos'] = pd.to_numeric(df_jugadores.at[idx, 'Puntos'], errors='coerce') or 0
+                            df_jugadores.at[idx, 'Puntos'] += pts_g
+                            df_jugadores.at[idx, 'PG'] = (pd.to_numeric(df_jugadores.at[idx, 'PG'], errors='coerce') or 0) + 1
+                            df_jugadores.at[idx, 'PP'] = (pd.to_numeric(df_jugadores.at[idx, 'PP'], errors='coerce') or 0) + 1
+                            df_jugadores.at[idx, 'SG'] = (pd.to_numeric(df_jugadores.at[idx, 'SG'], errors='coerce') or 0) + sg_gan
+                            df_jugadores.at[idx, 'SP'] = (pd.to_numeric(df_jugadores.at[idx, 'SP'], errors='coerce') or 0) + sp_gan
+                            df_jugadores.at[idx, 'GG'] = (pd.to_numeric(df_jugadores.at[idx, 'GG'], errors='coerce') or 0) + gg_gan
+                            df_jugadores.at[idx, 'GP'] = (pd.to_numeric(df_jugadores.at[idx, 'GP'], errors='coerce') or 0) + gp_gan
 
                     for j in perdedores:
-                        idx = df_jugadores.index[df_jugadores['Nombre'] == j][0]
-                        df_jugadores.at[idx, 'Puntos'] += pts_p
-                        df_jugadores.at[idx, 'PP_perd'] += 1
-                        df_jugadores.at[idx, 'PP'] += 1
-                        df_jugadores.at[idx, 'SG'] += sp_gan # Sus ganados son los perdidos del otro
-                        df_jugadores.at[idx, 'SP'] += sg_gan
-                        df_jugadores.at[idx, 'GG'] += gp_gan
-                        df_jugadores.at[idx, 'GP'] += gg_gan
+                        idx_list = df_jugadores.index[df_jugadores['Nombre'].str.lower() == j.strip().lower()].tolist()
+                        if idx_list:
+                            idx = idx_list[0]
+                            df_jugadores.at[idx, 'Puntos'] = pd.to_numeric(df_jugadores.at[idx, 'Puntos'], errors='coerce') or 0
+                            df_jugadores.at[idx, 'Puntos'] += pts_p
+                            df_jugadores.at[idx, 'PP_perd'] = (pd.to_numeric(df_jugadores.at[idx, 'PP_perd'], errors='coerce') or 0) + 1
+                            df_jugadores.at[idx, 'PP'] = (pd.to_numeric(df_jugadores.at[idx, 'PP'], errors='coerce') or 0) + 1
+                            df_jugadores.at[idx, 'SG'] = (pd.to_numeric(df_jugadores.at[idx, 'SG'], errors='coerce') or 0) + sp_gan # Sus ganados son los perdidos del otro
+                            df_jugadores.at[idx, 'SP'] = (pd.to_numeric(df_jugadores.at[idx, 'SP'], errors='coerce') or 0) + sg_gan
+                            df_jugadores.at[idx, 'GG'] = (pd.to_numeric(df_jugadores.at[idx, 'GG'], errors='coerce') or 0) + gp_gan
+                            df_jugadores.at[idx, 'GP'] = (pd.to_numeric(df_jugadores.at[idx, 'GP'], errors='coerce') or 0) + gg_gan
 
-                    # Guardar Partido
+                    # 3. Guardar en Partidos
                     res_str = f"{p1s1}-{p2s1}, {p1s2}-{p2s2}" + (f", {p1s3}-{p2s3}" if (p1s3+p2s3)>0 else "")
                     nueva_fila = pd.DataFrame([{"Fecha": datetime.now().strftime("%d/%m/%Y"), "Ganador1": ganadores[0], "Ganador2": ganadores[1], "Perdedor1": perdedores[0], "Perdedor2": perdedores[1], "Resultado": res_str}])
-                    
                     df_partidos_upd = pd.concat([df_partidos, nueva_fila], ignore_index=True)
-                    
-                    # SUBIR TODO
+
+                    # 4. SUBIR A GOOGLE SHEETS
                     conn.update(worksheet="Partidos", data=df_partidos_upd)
                     conn.update(worksheet="Jugadores", data=df_jugadores)
                     
-                    st.success("✅ ¡Ranking actualizado y partido guardado!")
+                    st.success("✅ ¡Base de datos actualizada!")
                     st.balloons()
                     st.rerun()
 
