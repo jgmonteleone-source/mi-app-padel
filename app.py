@@ -125,8 +125,36 @@ elif menu == "📝 Cargar Partido":
                     n_fila = pd.DataFrame([{"Fecha": datetime.now().strftime("%d/%m/%Y"), "Ganador1": gan[0], "Ganador2": gan[1], "Perdedor1": perd[0], "Perdedor2": perd[1], "Resultado": res}])
                     
                     # Guardar
-                    conn.update(worksheet="Partidos", data=pd.concat([df_partidos, n_fila], ignore_index=True))
-                    conn.update(worksheet="Jugadores", data=df_jugadores)
+                    # --- ESTE ES EL BLOQUE QUE DEBES SUSTITUIR ---
+                    
+                    # 3. Preparar los datos para subir (Orden exacto de tu Excel)
+                    orden_columnas = ["Nombre", "Foto", "Puntos", "PP", "PG", "PP_perd", "SG", "SP", "GG", "GP"]
+                    
+                    # Nos aseguramos de que todas las columnas existan en el DataFrame antes de filtrar
+                    for col in orden_columnas:
+                        if col not in df_jugadores.columns:
+                            df_jugadores[col] = 0
+                    
+                    df_jugadores_subir = df_jugadores[orden_columnas]
+
+                    # 4. SUBIR A GOOGLE SHEETS
+                    try:
+                        # Primero intentamos actualizar Jugadores
+                        conn.update(worksheet="Jugadores", data=df_jugadores_subir)
+                        
+                        # Luego actualizamos Partidos
+                        res = f"{p1s1}-{p2s1}, {p1s2}-{p2s2}" + (f", {p1s3}-{p2s3}" if (p1s3+p2s3)>0 else "")
+                        n_fila = pd.DataFrame([{"Fecha": datetime.now().strftime("%d/%m/%Y"), "Ganador1": gan[0], "Ganador2": gan[1], "Perdedor1": perd[0], "Perdedor2": perd[1], "Resultado": res}])
+                        df_partidos_upd = pd.concat([df_partidos, n_fila], ignore_index=True)
+                        
+                        conn.update(worksheet="Partidos", data=df_partidos_upd)
+                        
+                        st.cache_data.clear() # Limpia la memoria para ver los cambios
+                        st.success("✅ ¡Base de datos y Ranking actualizados con éxito!")
+                        st.balloons()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error al intentar escribir en Google Sheets: {e}")
                     
                     st.cache_data.clear()
                     st.success("✅ ¡Actualizado!")
