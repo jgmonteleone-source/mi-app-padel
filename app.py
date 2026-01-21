@@ -9,13 +9,15 @@ st.set_page_config(page_title="Padel Pro App", layout="wide")
 # --- CONEXIÓN A GOOGLE SHEETS ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+@st.cache_data(ttl=300) # Guarda los datos en memoria por 5 minutos
 def cargar_datos():
     try:
-        # Busca automáticamente la sección [connections.gsheets] de los Secrets
-        jugadores = conn.read(worksheet="Jugadores", ttl="0")
-        partidos = conn.read(worksheet="Partidos", ttl="0")
+        # Importante: Quitamos el ttl=0 de dentro del conn.read
+        jugadores = conn.read(worksheet="Jugadores")
+        partidos = conn.read(worksheet="Partidos")
         return jugadores, partidos
     except Exception as e:
+        # ... (el resto de tu código de error)
         st.error(f"Error de conexión: {e}")
         return pd.DataFrame(columns=["Nombre", "Foto", "Puntos", "PP", "PG", "PP_perd", "SG", "SP", "GG", "GP"]), pd.DataFrame()
 
@@ -154,6 +156,8 @@ elif menu == "📝 Cargar Partido":
                     
                     st.success("✅ ¡Base de datos actualizada!")
                     st.balloons()
+                    # ... (dentro del botón de guardar, al final)
+                    st.cache_data.clear() # Borra la memoria temporal para que lea los datos nuevos
                     st.rerun()
 
 
