@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Padel Pro App", layout="wide")
 
-# --- CSS FIJO E INAMOVIBLE (SOMBRAS Y TARJETAS) ---
+# --- CSS FIJO E INAMOVIBLE (DISEÑO SEGURO) ---
 st.markdown("""
     <style>
-    /* Forzar sombras reales en todos los contenedores con borde */
+    /* Forzar sombras potentes en Ranking y Bloques de Carga */
     div[data-testid="stVerticalBlockBorderWrapper"] {
         box-shadow: 0px 10px 30px rgba(0,0,0,0.2) !important;
         border-radius: 15px !important;
@@ -43,7 +43,6 @@ st.markdown("""
         font-weight: bold;
         margin-top: 5px;
     }
-    /* Estilo para los títulos de filtros */
     .filtro-resaltado {
         font-size: 19px;
         font-weight: bold;
@@ -145,13 +144,15 @@ elif menu == "⚔️ H2H":
     v2 = len(enf[(enf['Ganador1'] == j2) | (enf['Ganador2'] == j2)])
     
     st.markdown("### HISTORIAL:")
-    st.markdown(f"## {j1} {v1} — {v2} {j2}") # Salto de línea implícito por el encabezado H2
+    st.markdown(f"## {j1} {v1} — {v2} {j2}")
     
-    enf['Ganadores'] = enf['Ganador1'] + " / " + enf['Ganador2']
-    enf['Perdedores'] = enf['Perdedor1'] + " / " + enf['Perdedor2']
-    enf['Fecha_str'] = enf['Fecha'].dt.strftime('%d/%m/%Y')
-    
-    st.dataframe(enf[["Fecha_str", "Ganadores", "Perdedores", "Resultado"]], hide_index=True, use_container_width=True)
+    if not enf.empty:
+        enf['Ganadores'] = enf['Ganador1'] + " / " + enf['Ganador2']
+        enf['Perdedores'] = enf['Perdedor1'] + " / " + enf['Perdedor2']
+        enf['Fecha_str'] = enf['Fecha'].dt.strftime('%d/%m/%Y')
+        st.dataframe(enf[["Fecha_str", "Ganadores", "Perdedores", "Resultado"]], hide_index=True, use_container_width=True)
+    else:
+        st.info("No hay enfrentamientos en este periodo.")
 
 # --- 3. CARGAR PARTIDO ---
 elif menu == "📝 Cargar partido":
@@ -160,16 +161,54 @@ elif menu == "📝 Cargar partido":
     with st.form("f_reg"):
         with st.container(border=True):
             st.subheader("👥 Pareja 1")
-            p1j1, p1j2 = st.selectbox("Jugador A", nombres), st.selectbox("Jugador B", nombres)
+            p1j1, p1j2 = st.selectbox("Jugador A", nombres, key="a"), st.selectbox("Jugador B", nombres, key="b")
         with st.container(border=True):
             st.subheader("👥 Pareja 2")
-            p2j1, p2j2 = st.selectbox("Jugador C", nombres), st.selectbox("Jugador D", nombres)
-        for i in [1, 2, 3]:
-            with st.container(border=True):
-                st.subheader(f"🔢 SET {i}")
-                c1, c2 = st.columns(2)
-                if i==1: s1p1, s1p2 = c1.number_input("P1", 0, 7, key="s1p1"), c2.number_input("P2", 0, 7, key="s1p2")
-                if i==2: s2p1, s2p2 = c1.number_input("P1", 0, 7, key="s2p1"), c2.number_input("P2", 0, 7, key="s2p2")
-                if i==3: s3p1, s3p2 = c1.number_input("P1", 0, 7, key="s3p1"), c2.number_input("P2", 0, 7, key="s3p2")
+            p2j1, p2j2 = st.selectbox("Jugador C", nombres, key="c"), st.selectbox("Jugador D", nombres, key="d")
+        
+        with st.container(border=True):
+            st.subheader("🔢 SET 1")
+            c1, c2 = st.columns(2)
+            s1p1 = c1.number_input("P1", 0, 7, key="s1p1")
+            s1p2 = c2.number_input("P2", 0, 7, key="s1p2")
+        with st.container(border=True):
+            st.subheader("🔢 SET 2")
+            c1, c2 = st.columns(2)
+            s2p1 = c1.number_input("P1", 0, 7, key="s2p1")
+            s2p2 = c2.number_input("P2", 0, 7, key="s2p2")
+        with st.container(border=True):
+            st.subheader("🔢 SET 3")
+            c1, c2 = st.columns(2)
+            s3p1 = c1.number_input("P1", 0, 7, key="s3p1")
+            s3p2 = c2.number_input("P2", 0, 7, key="s3p2")
+
         if st.form_submit_button("💾 GUARDAR PARTIDO", use_container_width=True):
-            #
+            ganador_s1 = "P1" if s1p1 > s1p2 else "P2"
+            ganador_s2 = "P1" if s2p1 > s2p2 else "P2"
+            
+            error = False
+            if (s1p1 == 7 and s1p2 not in [5,6]) or (s1p2 == 7 and s1p1 not in [5,6]) or \
+               (s2p1 == 7 and s2p2 not in [5,6]) or (s2p2 == 7 and s2p1 not in [5,6]) or \
+               (s3p1 == 7 and s3p2 not in [5,6]) or (s3p2 == 7 and s3p1 not in [5,6]):
+                st.error("⚠️ Regla del 7: El rival debe tener 5 o 6.")
+                error = True
+            elif ganador_s1 == ganador_s2 and (s3p1 > 0 or s3p2 > 0):
+                st.error("⚠️ No se carga 3er set si ganaron 2-0.")
+                error = True
+            
+            if not error:
+                sets_p1 = (1 if s1p1 > s1p2 else 0) + (1 if s2p1 > s2p2 else 0) + (1 if s3p1 > s3p2 else 0)
+                ganadores = [p1j1, p1j2] if sets_p1 >= 2 else [p2j1, p2j2]
+                perdedores = [p2j1, p2j2] if sets_p1 >= 2 else [p1j1, p1j2]
+                res = f"{s1p1}-{s1p2}, {s2p1}-{s2p2}" + (f", {s3p1}-{s3p2}" if (s3p1+s3p2)>0 else "")
+                nueva_fila = pd.DataFrame([{"Fecha": datetime.now().strftime("%d/%m/%Y"), "Ganador1": ganadores[0], "Ganador2": ganadores[1], "Perdedor1": perdedores[0], "Perdedor2": perdedores[1], "Resultado": res}])
+                df_total = pd.concat([df_partidos, nueva_fila], ignore_index=True)
+                conn.update(worksheet="Partidos", data=df_total)
+                st.success("✅ ¡Guardado!")
+
+# --- 4. BUSCAR JUGADOR ---
+elif menu == "🔍 Buscar Jugador":
+    st.title("🔍 Buscar Jugador")
+    nombres = sorted(df_jugadores["Nombre"].tolist())
+    sel = st.selectbox("Escribe el nombre", [""] + nombres)
+    if sel: mostrar_perfil(sel, df_jugadores)
