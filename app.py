@@ -27,6 +27,8 @@ df_jugadores, df_partidos = cargar_datos()
 # --- NAVEGACIÓN ---
 menu = st.sidebar.radio("MENÚ PRINCIPAL", ["🏆 Ranking", "⚔️ Cara a Cara (H2H)", "📝 Cargar Partido", "👤 Gestionar Jugadores"])
 
+
+
 if menu == "🏆 Ranking":
     st.title("🏆 Clasificación General")
     
@@ -50,6 +52,10 @@ if menu == "🏆 Ranking":
     else:
         st.info("No hay jugadores registrados.")
 
+
+
+
+
 elif menu == "⚔️ Cara a Cara (H2H)":
     st.title("⚔️ Cara a Cara (H2H)")
     if not df_jugadores.empty:
@@ -67,6 +73,9 @@ elif menu == "⚔️ Cara a Cara (H2H)":
             v_b = len(enf[(enf['Ganador1'] == j_b) | (enf['Ganador2'] == j_b)])
             st.header(f"Historial: {j_a} {v_a} - {v_b} {j_b}")
             st.dataframe(enf, use_container_width=True)
+
+
+
 
 elif menu == "📝 Cargar Partido":
     st.title("📝 Registrar Partido")
@@ -108,17 +117,36 @@ elif menu == "📝 Cargar Partido":
                         gan, perd = [p2j1, p2j2], [p1j1, p1j2]
                         pt_g, pt_p = (3 if sets_p1 == 0 else 2), (1 if sets_p1 == 1 else 0)
 
-                    # Actualizar DataFrame Jugadores
+                    # --- ACTUALIZACIÓN DE JUGADORES (VERSIÓN RADICAL) ---
+                    # 1. Aseguramos que las columnas sean numéricas antes de hacer nada
+                    columnas_num = ['Puntos', 'PG', 'PP', 'PP_perd', 'SG', 'SP', 'GG', 'GP']
+                    for col in columnas_num:
+                        df_jugadores[col] = pd.to_numeric(df_jugadores[col], errors='coerce').fillna(0)
+
+                    # 2. Actualizamos Ganadores
                     for j in gan:
-                        idx = df_jugadores.index[df_jugadores['Nombre'] == j][0]
-                        df_jugadores.at[idx, 'Puntos'] = pd.to_numeric(df_jugadores.at[idx, 'Puntos'], errors='coerce') + pt_g
-                        df_jugadores.at[idx, 'PG'] = pd.to_numeric(df_jugadores.at[idx, 'PG'], errors='coerce') + 1
-                        df_jugadores.at[idx, 'PP'] = pd.to_numeric(df_jugadores.at[idx, 'PP'], errors='coerce') + 1
+                        idx = df_jugadores.index[df_jugadores['Nombre'] == j]
+                        if not idx.empty:
+                            df_jugadores.loc[idx, 'Puntos'] += pt_g
+                            df_jugadores.loc[idx, 'PG'] += 1
+                            df_jugadores.loc[idx, 'PP'] += 1
+                        else:
+                            st.error(f"No se encontró al jugador: {j}")
+
+                    # 3. Actualizamos Perdedores
                     for j in perd:
-                        idx = df_jugadores.index[df_jugadores['Nombre'] == j][0]
-                        df_jugadores.at[idx, 'Puntos'] = pd.to_numeric(df_jugadores.at[idx, 'Puntos'], errors='coerce') + pt_p
-                        df_jugadores.at[idx, 'PP_perd'] = pd.to_numeric(df_jugadores.at[idx, 'PP_perd'], errors='coerce') + 1
-                        df_jugadores.at[idx, 'PP'] = pd.to_numeric(df_jugadores.at[idx, 'PP'], errors='coerce') + 1
+                        idx = df_jugadores.index[df_jugadores['Nombre'] == j]
+                        if not idx.empty:
+                            df_jugadores.loc[idx, 'Puntos'] += pt_p
+                            df_jugadores.loc[idx, 'PP_perd'] += 1
+                            df_jugadores.loc[idx, 'PP'] += 1
+                        else:
+                            st.error(f"No se encontró al jugador: {j}")
+
+                    # 4. PREPARAR SUBIDA
+                    # IMPORTANTE: Forzamos a que los datos sean enteros para Google Sheets
+                    for col in columnas_num:
+                        df_jugadores[col] = df_jugadores[col].astype(int)
                     
                     # Nuevo partido
                     res = f"{p1s1}-{p2s1}, {p1s2}-{p2s2}" + (f", {p1s3}-{p2s3}" if (p1s3+p2s3)>0 else "")
@@ -160,6 +188,9 @@ elif menu == "📝 Cargar Partido":
                     st.success("✅ ¡Actualizado!")
                     st.rerun()
 
+
+
+
 elif menu == "👤 Gestionar Jugadores":
     st.title("Añadir Jugador")
     with st.form("nuevo_j"):
@@ -170,3 +201,6 @@ elif menu == "👤 Gestionar Jugadores":
             conn.update(worksheet="Jugadores", data=pd.concat([df_jugadores, n_j], ignore_index=True))
             st.cache_data.clear()
             st.rerun()
+
+
+
