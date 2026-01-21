@@ -33,14 +33,21 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
-    #st.cache_data.clear() ====>>>>>>>>>>>>>>>>>>> LIMPIA EL CACHE PARA REINICIAR LOS DATOS
     try:
         jugadores = conn.read(worksheet="Jugadores").dropna(subset=["Nombre"])
         partidos = conn.read(worksheet="Partidos").dropna(subset=["Fecha"])
+        
+        # --- NUEVA LÍNEA: Rellena celdas vacías con 0 en estadísticas ---
+        columnas_stats = ['Puntos', 'PG', 'PP_perd', 'SG', 'SP']
+        for col in columnas_stats:
+            if col in jugadores.columns:
+                jugadores[col] = pd.to_numeric(jugadores[col]).fillna(0)
+        
         partidos['Fecha'] = pd.to_datetime(partidos['Fecha'], dayfirst=True, errors='coerce')
         jugadores['Nombre'] = jugadores['Nombre'].astype(str).str.strip()
         return jugadores, partidos
-    except:
+    except Exception as e:
+        st.error(f"Error al cargar: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
 df_jugadores, df_partidos = cargar_datos()
