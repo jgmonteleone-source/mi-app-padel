@@ -29,8 +29,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONEXIÓN A DATOS ---
-conn = st.connection("gsheets", type=GSheetsConnection)
+# --- CONEXIÓN A DATOS CON FIX DE LLAVE ---
+raw_secrets = st.secrets["connections"]["gsheets"].to_dict()
+if "private_key" in raw_secrets:
+    # Este paso convierte los "\n" de texto en saltos de línea reales
+    raw_secrets["private_key"] = raw_secrets["private_key"].replace("\\n", "\n")
+
+conn = st.connection("gsheets", type=GSheetsConnection, **raw_secrets)
+
+
 
 def cargar_datos():
     try:
