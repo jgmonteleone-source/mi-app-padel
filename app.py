@@ -29,13 +29,15 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONEXIÓN A DATOS CON FIX DE LLAVE ---
-raw_secrets = st.secrets["connections"]["gsheets"].to_dict()
-if "private_key" in raw_secrets:
-    # Este paso convierte los "\n" de texto en saltos de línea reales
-    raw_secrets["private_key"] = raw_secrets["private_key"].replace("\\n", "\n")
+# --- CONEXIÓN A DATOS (VERSIÓN DEFINITIVA) ---
+# Primero corregimos la llave en el diccionario de secretos internamente
+if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+    if "private_key" in st.secrets["connections"]["gsheets"]:
+        # Esto corrige la llave sin enviarla doblemente
+        st.secrets["connections"]["gsheets"]["private_key"] = st.secrets["connections"]["gsheets"]["private_key"].replace("\\n", "\n")
 
-conn = st.connection("gsheets", type=GSheetsConnection, **raw_secrets)
+# Ahora llamamos a la conexión de forma normal
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 
 
