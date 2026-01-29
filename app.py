@@ -34,25 +34,40 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
     try:
-        # Carga de Jugadores: forzamos limpieza de nulos para el Ranking
-        jugadores = conn.read(worksheet="Jugadores").dropna(subset=["Nombre"])
-        cols_numericas = ['Puntos', 'PG', 'PP_perd', 'SG', 'SP']
-        for col in cols_numericas:
-            if col in jugadores.columns:
-                jugadores[col] = pd.to_numeric(jugadores[col], errors='coerce').fillna(0)
+        # 1. Carga de Jugadores con mayor tolerancia
+        jugadores = conn.read(worksheet="Jugadores", ttl=0)
         
-        # Carga de Partidos: manejamos hoja vacía
-        partidos = conn.read(worksheet="Partidos", ttl=0) # ttl=0 para que siempre lea lo último
+        # Si la hoja existe, limpiamos nombres de columnas (quita espacios raros)
+        jugadores.columns = [c.strip() for c in jugadores.columns]
+        
+        # Nos aseguramos de que haya datos antes de procesar
+        if not jugadores.empty:
+            # Eliminamos filas donde el nombre esté vacío
+            jugadores = jugadores.dropna(subset=["Nombre"])
+            
+            # Convertimos a número solo las columnas que existan realmente
+            cols_posibles = ['Puntos', 'PG', 'PP_perd', 'SG', 'SP']
+            for col in cols_posibles:
+                if col in jugadores.columns:
+                    jugadores[col] = pd.to_numeric(jugadores[col], errors='coerce').fillna(0)
+            
+            # Limpieza final de nombres de jugadores
+            jugadores['Nombre'] = jugadores['Nombre'].astype(str).str.strip()
+        
+        # 2. Carga de Partidos (Mantenemos tu lógica que ya funciona)
+        partidos = conn.read(worksheet="Partidos", ttl=0)
         if partidos.empty:
             partidos = pd.DataFrame(columns=["Fecha", "Ganador1", "Ganador2", "Perdedor1", "Perdedor2", "Resultado"])
         else:
             partidos = partidos.dropna(subset=["Fecha"])
             partidos['Fecha'] = pd.to_datetime(partidos['Fecha'], dayfirst=True, errors='coerce')
         
-        jugadores['Nombre'] = jugadores['Nombre'].astype(str).str.strip()
         return jugadores, partidos
-    except:
+    except Exception as e:
+        # Esto te ayudará a ver el error real en la pantalla si algo falla
+        st.error(f"Error cargando datos: {e}")
         return pd.DataFrame(), pd.DataFrame()
+        
 
 # Recargamos datos
 df_jugadores, df_partidos = cargar_datos()
