@@ -29,17 +29,55 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONEXIÓN A DATOS (SOLUCIÓN FINAL) ---
-# Extraemos los secretos a un diccionario normal que SÍ podemos modificar
-creds = dict(st.secrets["connections"]["gsheets"])
+# --- CONEXIÓN A DATOS (VERSIÓN MANUAL SIN ERRORES) ---
+from google.oauth2.service_account import Credentials
+import gspread
 
-# Arreglamos la llave privada en ese diccionario
-if "private_key" in creds:
-    creds["private_key"] = creds["private_key"].replace("\\n", "\n")
+def obtener_conexion_manual():
+    # 1. Extraemos los datos de secretos
+    s = st.secrets["connections"]["gsheets"]
+    
+    # 2. Limpiamos la llave privada de cualquier error de formato
+    clean_key = s["private_key"].replace("\\n", "\n")
+    
+    # 3. Creamos las credenciales de Google directamente
+    info = {
+        "type": "service_account",
+        "project_id": s["project_id"],
+        "private_key_id": s["private_key_id"],
+        "private_key": clean_key,
+        "client_email": s["client_email"],
+        "client_id": s["client_id"],
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+        "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+        "client_x509_cert_url": s["client_x509_cert_url"]
+    }
+    
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(info, scopes=scopes)
+    return gspread.authorize(creds)
 
-# Creamos la conexión pasando el diccionario corregido
-# Usamos un nombre de conexión distinto ("gsheets_fixed") para evitar conflictos
-conn = st.connection("gsheets_fixed", type=GSheetsConnection, **creds)
+# Intentamos conectar
+try:
+    gc = obtener_conexion_manual()
+    # Abrimos el spreadsheet por su URL o ID que tienes en Secrets
+    sh = gc.open_by_url(st.secrets["connections"]["gsheets"]["spreadsheet"])
+    
+    # Reemplazamos el objeto 'conn' para que el resto de tu código funcione igual
+    class MockConn:
+        def read(self, worksheet, ttl=0):
+            ws = sh.worksheet(worksheet)
+            data = ws.get_all_records()
+            return pd.DataFrame(data)
+        def update(self, worksheet, data):
+            ws = sh.worksheet(worksheet)
+            ws.clear()
+            ws.update([data.columns.values.tolist()] + data.values.tolist())
+
+    conn = MockConn()
+except Exception as e:
+    st.error(f"Error crítico de conexión: {e}")
 
 
 
